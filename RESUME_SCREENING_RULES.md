@@ -1,4 +1,4 @@
-# 📘 Resurrection Screening Agent: The Ultimate Technical Manual (v3.0)
+# 📘 Resurrection Screening Agent: The Ultimate Technical Manual (v3.2)
 
 ## 📌 1. System Philosophy & Architecture
 This is an **Enterprise-Grade AI Hiring Assistant** designed to replace manual resume screening with a bias-free, data-driven "Fit Score" engine. It mimics a Senior Technical Recruiter's cognitive process using a **Hybrid AI Architecture**:
@@ -15,7 +15,8 @@ This is an **Enterprise-Grade AI Hiring Assistant** designed to replace manual r
 | `Frontend/index.html` | **Frontend** | Vanilla JS/CSS UI. Manages file uploads, drag-and-drop interactions, and dynamic dashboard rendering. |
 | `Backend/app/main.py` | **Backend** | The core API controller. Handles `analyze/` endpoint, file parsing, and orchestrates the scoring pipeline. |
 | `Backend/app/core/config.py` | **Control** | Centralized Configuration using Pydantic Settings. Manages API keys, model selection (`llama-3.3-70b-versatile`), and weights. |
-| `Reports/` | **Storage** | Organized output structure. Stores `All_Resumes`, `Shortlisted_Resumes`, and `Rejected_Resumes` for audit trails. |
+| `Backend/app/services/gmail_service.py` | **Integration** | **Gmail API Handler**. Manages OAuth2 auth, fetches emails by date, and **recursively extracts PDFs** from nested `.eml` attachments. |
+| `Reports/` | **Storage** | Organized output. Stores `All_Resumes`, `Shortlisted_Resumes`, `Not_Selected_Resumes`, and `Rejected_Resumes`. |
 | `Backend/app/services/score_service.py` | **Logic** | The scoring engine. Implements the weighted formulas and rejection logic. |
 | `Backend/app/models/schemas.py` | **Validation** | Pydantic models (`LLMOutput`, `candidate_score`) ensuring strict type safety for data exchange. |
 
@@ -28,8 +29,13 @@ This is an **Enterprise-Grade AI Hiring Assistant** designed to replace manual r
     *   *Input:* `jd_text` (Pasted) or `jd_file` (PDF/TXT).
     *   *Action:* NLP extraction of Skills, Required Experience, and Keywords using SpaCy.
     *   *Dynamic Config:* Adapts scoring weights based on role seniority detected in JD.
-2.  **File Parsing (`pdf_service`):**
-    *   *Input:* PDFs or Text files.
+2.  **Resume Sourcing (Dual-Channel):**
+    *   **Source A: Manual Upload:** Drag-and-drop PDFs/DOCXs.
+    *   **Source B: Gmail Fetch:** 
+        *   Authenticates via OAuth2.
+        *   Searches emails with query `has:attachment (resume OR cv)`.
+        *   **Deep Extraction:** Recursively parses `.eml` (forwarded email) attachments to find nested PDFs.
+3.  **File Parsing (`pdf_service`):**
     *   *Logic:* Robust text extraction. Corrupted files trigger early validation errors.
 
 ### **3.2 The Anonymization Engine (`ai_service.anonymize`)**
@@ -90,11 +96,12 @@ The system employs a strict "Funnel" strategy.
 *   **Page Limit Rule:**
     *   **Junior (<2y exp):** Automatically **REJECTED** if > 1 Page.
     *   **Senior (>=2y exp):** Automatically **REJECTED** if > 2 Pages.
-*   **Outcome:** Candidate marked as `is_rejected=True`. Reason logged. No AI Analysis.
+*   **Outcome:** Candidate marked as `is_rejected=True`. Saved to `Reports/Rejected_Resumes`. No AI Analysis.
 
 ### **Tier 2: "Soft" Rejection (Low Score)**
 *   **Low Fit:** Total Score falls below competitive threshold.
 *   **Outcome:** Labeled as **"Not Selected"** (Yellow Badge).
+*   **Storage:** Saved to `Reports/Not_Selected_Resumes` for future reference.
 *   **Analysis:** Sent to Llama 3.3 for *brief* feedback ("Why they didn't make the cut").
 
 ### **Tier 3: The "Top N" Cutoff (The Shortlist)**
@@ -102,6 +109,7 @@ The system employs a strict "Funnel" strategy.
 *   **Action:**
     *   System ranks valid candidates by Total Score.
     *   **Top N:** Labeled **"Recommended"** or **"Potential"**.
+    *   **Storage:** Saved to `Reports/Shortlisted_Resumes`.
     *   **UI:** Displayed in the "Shortlisted Candidates" view with full breakdown.
 
 ---
@@ -120,6 +128,6 @@ The system employs a strict "Funnel" strategy.
 ---
 
 ## 🛡️ 7. Data Privacy & Compliance
-*   **Zero Retention:** `data/` directory is ephemeral.
+*   **Zero Retention:** `data/` directory is ephemeral; reports are local to user's machine.
 *   **PII Masking:** AI Anonymization layer runs *before* detailed analysis.
 *   **Structured Output:** LLM assumes **JSON Mode** enforcement to prevent data leakage or hallucinations.

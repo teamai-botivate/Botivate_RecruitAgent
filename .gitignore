@@ -35,3 +35,8 @@ desktop.ini
 # Temp Files
 *.tmp
 *.bak
+
+# Google Credentials (DO NOT COMMIT)
+credentials.json
+token.json
+client_secret_*.json
