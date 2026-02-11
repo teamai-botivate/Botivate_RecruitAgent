@@ -33,6 +33,7 @@ class CandidateAnalysis(BaseModel):
     reasoning: str
     strengths: List[str]
     weaknesses: List[str]
+    hobbies_and_achievements: Optional[List[str]] = []
 
 class LLMOutput(BaseModel):
     candidates: List[CandidateAnalysis]

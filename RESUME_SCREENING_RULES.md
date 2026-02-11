@@ -1,4 +1,4 @@
-# 📘 Resurrection Screening Agent: The Ultimate Technical Manual (v3.2)
+# 📘 Resurrection Screening Agent: The Ultimate Technical Manual (v3.3)
 
 ## 📌 1. System Philosophy & Architecture
 This is an **Enterprise-Grade AI Hiring Assistant** designed to replace manual resume screening with a bias-free, data-driven "Fit Score" engine. It mimics a Senior Technical Recruiter's cognitive process using a **Hybrid AI Architecture**:
@@ -74,6 +74,16 @@ Calculates the **Total Fit Score** using a weighted formula:
 
 #### **D. Visual Presentation (30 pts)**
 *   **Logic:** Analyzes formatting complexity, whitespace usage, and section headers. Penalizes cluttered or plain-text dumps.
+
+### **3.5 The AI Reasoning Engine (`LLMOutput`)**
+*   **Prompt Engineering:**
+    *   *Persona:* Senior Technical Recruiter.
+    *   *Task:* Analyze candidate against JD.
+    *   *Output Schema:*
+        *   `reasoning`: Why fit/no fit?
+        *   `strengths`: Hard/Soft skills list.
+        *   `weaknesses`: Gaps in experience.
+        *   `hobbies_and_achievements`: Extracurriculars, certifications, volunteering.
 
 ---
 

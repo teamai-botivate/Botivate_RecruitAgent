@@ -83,10 +83,10 @@ Candidates are evaluated on a weighted multi-dimensional scale:
 *   **Visuals (30%):** Formatting, whitespace, and presentation quality.
 *   **Semantic (15%):** Embedding similarity (Cos Sim) for "meaning" match.
 
-### 3. **Three-Tier Filtering Protocol**
-*   **🚫 Hard Rejected (Red):** Automatically blocked for violating constraints.
-*   **🟡 Not Selected (Yellow):** Valid candidates who scored lower than the "Top N". Saved to `Reports/Not_Selected_Resumes`.
-*   **🟢 Shortlisted (Green):** The "Cream of the Crop". Detailed AI analysis provided.
+### 3. **Hiring Manager Persona**
+*   **Structured Feedback:** Provides specific reasoning for every decision.
+*   **Holistic Analysis:** Extracts and evaluates **Activities, Hobbies, & Achievements** to find well-rounded candidates.
+*   **Three-Tier Filtering:** Implements a strict funnel (Hard Reject -> Soft Reject -> Shortlist).
 
 ---
 

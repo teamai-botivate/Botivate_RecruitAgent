@@ -187,6 +187,7 @@ async def _run_analysis_pipeline(jd_text: str, file_buffers: Dict[str, bytes], t
             - "reasoning": Detailed specific feedback comparing the candidate strictly against the JD constraints.
             - "strengths": List of strings.
             - "weaknesses": List of strings.
+            - "hobbies_and_achievements": List of strings (Extract any Hobbies, Hackathons, Awards, Certifications, or Volunteering).
             
             Ensure the JSON is valid.
             """
@@ -263,6 +264,8 @@ async def _run_analysis_pipeline(jd_text: str, file_buffers: Dict[str, bytes], t
                     executive_summary += "**✅ Strengths:**\n" + "\n".join([f"- {s}" for s in item.get("strengths")]) + "\n\n"
                 if item.get("weaknesses"):
                     executive_summary += "**⚠️ Weaknesses:**\n" + "\n".join([f"- {w}" for w in item.get("weaknesses")]) + "\n\n"
+                if item.get("hobbies_and_achievements"):
+                    executive_summary += "**🏆 Activities & Achievements:**\n" + "\n".join([f"- {h}" for h in item.get("hobbies_and_achievements")]) + "\n\n"
                 executive_summary += "---\n"
         
         md_content = f"""# 🧬 RecruitAI Screening Report

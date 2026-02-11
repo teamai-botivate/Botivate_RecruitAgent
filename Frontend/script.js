@@ -233,16 +233,22 @@ function renderCard(item, container) {
         <span class="badge ${badgeClass}">${displayStatus}</span>
     </div>
     <p class="analysis-text">${item.reasoning}</p>
-    <div class="pros-cons">
-        <div class="pros">
-            <h5>Strengths</h5>
-            <ul>${(item.strengths || []).map(s => `<li>${s}</li>`).join('')}</ul>
+    <div class="pros-cons" style="display: flex; gap: 2rem; margin-top: 1.5rem;">
+        <div class="pros" style="flex: 1;">
+            <h5 style="color: #166534; margin-bottom: 0.5rem; font-size: 0.9rem;">✅ Strengths</h5>
+            <ul style="padding-left: 1rem; color: #334155; font-size: 0.9rem;">${(item.strengths || []).map(s => `<li>${s}</li>`).join('')}</ul>
         </div>
-        <div class="cons">
-            <h5>${isHardRejected || isSoftRejected ? 'Rejection Factors & Gaps' : 'Areas of Concern'}</h5>
-            <ul>${(item.weaknesses || []).map(w => `<li>${w}</li>`).join('')}</ul>
+        <div class="cons" style="flex: 1;">
+            <h5 style="color: #991b1b; margin-bottom: 0.5rem; font-size: 0.9rem;">${isHardRejected || isSoftRejected ? '🚫 Rejection Factors' : '⚠️ Areas of Concern'}</h5>
+            <ul style="padding-left: 1rem; color: #334155; font-size: 0.9rem;">${(item.weaknesses || []).map(w => `<li>${w}</li>`).join('')}</ul>
         </div>
     </div>
+    ${(item.hobbies_and_achievements && item.hobbies_and_achievements.length > 0) ? `
+    <div class="hobbies" style="margin-top: 1.5rem; padding-top: 1rem; border-top: 1px solid #e2e8f0;">
+        <h5 style="color: #4f46e5; margin-bottom: 0.5rem; font-size: 0.9rem;">🏆 Activities & Hobbies</h5>
+        <ul style="padding-left: 1rem; color: #334155; font-size: 0.9rem;">${item.hobbies_and_achievements.map(h => `<li>${h}</li>`).join('')}</ul>
+    </div>
+    ` : ''}
     `;
     container.appendChild(card);
 }
