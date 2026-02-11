@@ -6,7 +6,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Resume Screener Pro</title>
     <link rel="stylesheet" href="styles.css">
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 </head>
 
 <body>
@@ -19,18 +19,46 @@
 
             <div class="config-section">
                 <h3>Scoring Weights</h3>
-                <label>Keywords (25%) <input type="range" class="slider" value="25" disabled></label>
-                <label>Experience (20%) <input type="range" class="slider" value="20" disabled></label>
-                <label>Education (10%) <input type="range" class="slider" value="10" disabled></label>
-                <label>Visuals (30%) <input type="range" class="slider" value="30" disabled></label>
-                <br>
-                <p class="info-text">*Weights are auto-balanced by AI based on JD.</p>
+
+                <div class="slider-group">
+                    <div class="label-row">
+                        <span>Keywords</span>
+                        <span class="val">30%</span>
+                    </div>
+                    <input type="range" class="slider" value="30" disabled>
+                </div>
+
+                <div class="slider-group">
+                    <div class="label-row">
+                        <span>Experience</span>
+                        <span class="val">30%</span>
+                    </div>
+                    <input type="range" class="slider" value="30" disabled>
+                </div>
+
+                <div class="slider-group">
+                    <div class="label-row">
+                        <span>Education</span>
+                        <span class="val">10%</span>
+                    </div>
+                    <input type="range" class="slider" value="10" disabled>
+                </div>
+
+                <div class="slider-group">
+                    <div class="label-row">
+                        <span>Visuals</span>
+                        <span class="val">30%</span>
+                    </div>
+                    <input type="range" class="slider" value="30" disabled>
+                </div>
+
+                <p class="info-text">Weights auto-optimized by AI</p>
             </div>
 
             <div class="workflow-steps">
-                <div class="step active">Step 1: Upload JD</div>
-                <div class="step">Step 2: Upload Resumes</div>
-                <div class="step">Step 3: Analyze</div>
+                <div class="step active">Job Description</div>
+                <div class="step">Candidate Resumes</div>
+                <div class="step">AI Analysis</div>
             </div>
         </aside>
 
@@ -59,11 +87,43 @@
                 </div>
 
                 <div class="drop-box" id="resume-drop">
-                    <span class="icon">👥</span>
-                    <h3>Drag & Drop Resumes</h3>
-                    <p>Upload multiple files (.pdf)</p>
-                    <input type="file" id="resume-files" hidden multiple accept=".pdf,.txt">
-                    <div id="resume-count" class="file-name"></div>
+                    <!-- Manual Upload Section -->
+                    <div id="upload-section">
+                        <span class="icon">👥</span>
+                        <h3>Upload Resumes</h3>
+                        <p>Drag & drop .pdf files</p>
+                        <input type="file" id="resume-files" hidden multiple accept=".pdf,.txt">
+                        <div id="resume-count" class="file-name"></div>
+                    </div>
+
+                </div>
+            </section>
+
+            <!-- Gmail Integration Section (Moved outside upload area) -->
+            <section class="gmail-section"
+                style="margin-bottom: 2rem; padding: 1rem; border: 1px solid #cbd5e1; border-radius: 8px; background: white;">
+                <label
+                    style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer; color: #475569; font-weight: 600; font-size: 1rem; margin-bottom: 0.5rem;">
+                    <input type="checkbox" id="gmail-checkbox" style="width: 1.2rem; height: 1.2rem;">
+                    <span>Include Gmail Resumes 📧</span>
+                </label>
+
+                <div id="gmail-inputs" class="hidden" style="margin-top: 1rem; padding-left: 2rem;">
+                    <div style="display:flex; gap: 1rem; align-items:center;">
+                        <div style="display:flex; flex-direction:column; gap:0.3rem;">
+                            <label style="font-size:0.8rem; color:#64748b;">Start Date</label>
+                            <input type="date" id="start-date"
+                                style="padding: 0.5rem; border: 1px solid #cbd5e1; border-radius: 6px; font-family:inherit;">
+                        </div>
+                        <span style="font-weight:600; color:#cbd5e1;">to</span>
+                        <div style="display:flex; flex-direction:column; gap:0.3rem;">
+                            <label style="font-size:0.8rem; color:#64748b;">End Date</label>
+                            <input type="date" id="end-date"
+                                style="padding: 0.5rem; border: 1px solid #cbd5e1; border-radius: 6px; font-family:inherit;">
+                        </div>
+                    </div>
+                    <p style="font-size:0.85rem; color:#64748b; margin-top:0.5rem;">The AI will search for emails with
+                        PDF attachments containing "resume" or "cv".</p>
                 </div>
             </section>
 

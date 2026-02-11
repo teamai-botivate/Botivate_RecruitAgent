@@ -1,16 +1,20 @@
 
 from fastapi import FastAPI, UploadFile, File, Form, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from typing import List
+from typing import List, Dict
 import shutil
 import os
 import json
 import logging
 import warnings
+import re
+from datetime import datetime
 warnings.filterwarnings("ignore", category=DeprecationWarning)
+
 from .core.config import get_settings
-from .services import pdf_service, vector_service, ai_service, utils
+from .services import pdf_service, vector_service, ai_service, utils, gmail_service
 from .services.score_service import calculate_score
+from .models.schemas import LLMOutput
 
 # Configure Logging
 logging.basicConfig(
@@ -25,7 +29,7 @@ logger = logging.getLogger("ResumeAgent")
 
 app = FastAPI(title="Resume Screening Agent API", version="2.2")
 
-# Allow CORS for Frontend
+# Allow CORS
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -50,30 +54,12 @@ def open_report(path: str = Form(...)):
     except Exception as e:
         return {"status": "error", "message": str(e)}
 
-@app.post("/analyze")
-async def analyze_resumes(
-    jd_file: UploadFile = File(None),
-    jd_text_input: str = Form(None),
-    resume_files: List[UploadFile] = File(...),
-    top_n: int = Form(5)
-):
+async def _run_analysis_pipeline(jd_text: str, file_buffers: Dict[str, bytes], top_n: int, jd_source_name: str):
+    """
+    Core Logic: Processing -> Scoring -> AI Analysis -> Reporting
+    """
     try:
-        logger.info(f"🚀 STARTING ANALYSIS: {len(resume_files)} Resumes received.")
-        
         # 1. Process JD
-        if jd_file:
-            logger.info(f"Step 1: Processing Job Description File: {jd_file.filename}")
-            jd_bytes = await jd_file.read()
-            if jd_file.filename.endswith(".pdf"):
-                jd_text, _ = pdf_service.pdf_service.extract_text(jd_bytes)
-            else:
-                jd_text = jd_bytes.decode("utf-8")
-        elif jd_text_input:
-            logger.info("Step 1: Processing Job Description Text Input")
-            jd_text = jd_text_input
-        else:
-             raise HTTPException(status_code=400, detail="Job Description (File or Text) is required.")
-            
         jd_clean = utils.clean_text(jd_text)
         logger.info(f"   JD Length: {len(jd_clean)} chars")
         
@@ -85,7 +71,7 @@ async def analyze_resumes(
         jd_data = {
             "keywords": jd_keywords,
             "required_years": jd_years,
-            "location": "Remote" if "remote" in jd_clean else "" 
+            "location": "Remote" if "remote" in jd_clean.lower() else "" 
         }
 
         # 2. Process Resumes & Vectorize
@@ -94,24 +80,20 @@ async def analyze_resumes(
         resume_texts = {}
         resume_docs = []
         resume_metas = []
-        file_buffers = {}
         resume_pages = {}
         
-        for i, file in enumerate(resume_files):
-            # logger.info(f"   Reading Resume {i+1}: {file.filename}")
-            bytes_content = await file.read()
-            file_buffers[file.filename] = bytes_content
-            if file.filename.endswith(".pdf"):
-                text, pages = pdf_service.pdf_service.extract_text(bytes_content)
+        for fname, content in file_buffers.items():
+            if fname.lower().endswith(".pdf"):
+                text, pages = pdf_service.pdf_service.extract_text(content)
             else:
-                text = bytes_content.decode("utf-8")
+                text = content.decode("utf-8", errors="ignore")
                 pages = 1
             
             clean = utils.clean_text(text)
-            resume_texts[file.filename] = clean
-            resume_pages[file.filename] = pages
+            resume_texts[fname] = clean
+            resume_pages[fname] = pages
             resume_docs.append(clean)
-            resume_metas.append({"filename": file.filename})
+            resume_metas.append({"filename": fname})
 
         # Add to Vector DB
         logger.info(f"   Creating Vector Embeddings for {len(resume_docs)} documents...")
@@ -119,7 +101,7 @@ async def analyze_resumes(
         
         # 3. Calculate Semantic Similarity
         logger.info("Step 3: Calculating Semantic Similarity with JD...")
-        results = vector_service.vector_service.search(jd_clean, k=len(resume_files))
+        results = vector_service.vector_service.search(jd_clean, k=len(file_buffers))
         
         semantic_scores = {}
         for doc, score in results:
@@ -178,72 +160,63 @@ async def analyze_resumes(
             anon_text = ai_service.ai_service.anonymize(resume_texts[cand["filename"]])
             candidates_text += f"\n--- Candidate (NOT SELECTED - LOWER SCORE) ---\nFilename: {cand['filename']}\nScore: {cand['score']['total']}\nContent:\n{anon_text[:2000]}\n"
 
-        # NOTE: Hard Rejected candidates (Page Limit, etc) are EXCLUDED from AI analysis to save tokens.
-        # They will appear in the "Rejected" table with a short reason.
+        # Note: Hard Rejected candidates are EXCLUDED from AI analysis
+        
+        if not top_candidates and not remaining_candidates:
+             logger.warning("No valid candidates to analyze.")
+             img_analysis = []
+        else:
+            prompt = f"""
+            You are a Senior Technical Recruiter. Analyze these candidates for the Job Description below.
+            
+            JD Summary: {jd_clean[:1500]}
+            
+            Candidates:
+            {candidates_text}
+            
+            TASK:
+            Return a JSON OBJECT with a key "candidates" containing a list of objects.
+            
+            For SHORTLISTED candidates: Status = "Recommended" or "Potential".
+            For NOT SELECTED candidates: Status = "Rejected". Explain why they were not selected.
+            
+            Each object must have:
+            - "filename": exact filename from input
+            - "candidate_name": extracted name
+            - "status": "Recommended", "Potential", or "Rejected"
+            - "reasoning": Detailed specific feedback comparing the candidate strictly against the JD constraints.
+            - "strengths": List of strings.
+            - "weaknesses": List of strings.
+            
+            Ensure the JSON is valid.
+            """
+            llm_response = ai_service.ai_service.query(prompt, json_mode=True)
+            
+            # Pydantic Parsing
+            img_analysis = []
+            try:
+                json_str = llm_response
+                match = re.search(r"```json(.*?)```", llm_response, re.DOTALL)
+                if match:
+                    json_str = match.group(1).strip()
+                if not match:
+                    start = llm_response.find("{")
+                    end = llm_response.rfind("}")
+                    if start != -1 and end != -1:
+                        json_str = llm_response[start:end+1]
+                
+                parsed_obj = LLMOutput.model_validate_json(json_str)
+                if hasattr(parsed_obj, 'model_dump'):
+                    img_analysis = [c.model_dump() for c in parsed_obj.candidates]
+                else:
+                    img_analysis = [c.dict() for c in parsed_obj.candidates]
+            except Exception as e:
+                logger.warning(f"Failed to parse LLM JSON: {e}")
+                img_analysis = [{"candidate_name": "AI Parsing Error", "reasoning": "Could not parse AI response.", "filename": "report", "strengths": [], "weaknesses": [], "status": "Report"}]
 
-        prompt = f"""
-        You are a Senior Technical Recruiter. Analyze these candidates for the Job Description below.
-        
-        JD Summary: {jd_clean[:1500]}
-        
-        Candidates:
-        {candidates_text}
-        
-        TASK:
-        Return a JSON OBJECT with a key "candidates" containing a list of objects.
-        
-        For SHORTLISTED candidates: Status = "Recommended" or "Potential".
-        For NOT SELECTED candidates: Status = "Rejected". Explain why they were not selected (e.g. weaker skills vs top candidates).
-        
-        Each object must have:
-        - "filename": exact filename from input
-        - "candidate_name": extracted name (or use filename if unknown)
-        - "status": "Recommended", "Potential", or "Rejected"
-        - "reasoning": Detailed specific feedback comparing the candidate strictly against the JD constraints. Explain exactly why they failed or succeeded.
-        - "strengths": List of strings.
-        - "weaknesses": List of strings.
-        
-        Ensure the JSON is valid.
-        """
-        llm_response = ai_service.ai_service.query(prompt, json_mode=True)
-        
-        # Try to parse JSON with Pydantic
-        from .models.schemas import LLMOutput
-        import json
-        import re
-        img_analysis = []
-        try:
-            json_str = llm_response
-            # 1. Try to extract from markdown code blocks (even with json_mode, sometimes models wrap it)
-            match = re.search(r"```json(.*?)```", llm_response, re.DOTALL)
-            if match:
-                json_str = match.group(1).strip()
-            # 2. If no code block, try to find outer braces
-            if not match:
-                start = llm_response.find("{")
-                end = llm_response.rfind("}")
-                if start != -1 and end != -1:
-                    json_str = llm_response[start:end+1]
-            
-            # Pydantic Validation
-            parsed_obj = LLMOutput.model_validate_json(json_str)
-            
-            # Convert back to dict for API response
-            # Using .model_dump() for Pydantic v2, or .dict() for v1. Asssuming v2 or compatible.
-            if hasattr(parsed_obj, 'model_dump'):
-                img_analysis = [c.model_dump() for c in parsed_obj.candidates]
-            else:
-                img_analysis = [c.dict() for c in parsed_obj.candidates]
-
-        except Exception as e:
-            logger.warning(f"Failed to parse LLM JSON with Pydantic: {e}. Output: {llm_response[:100]}...")
-            # Fallback structure
-            img_analysis = [{"candidate_name": "AI Parsing Error", "reasoning": "Could not parse AI response.", "filename": "report", "strengths": [], "weaknesses": [], "status": "Report"}]
-            
         logger.info("✅ ANALYSIS COMPLETE. Generating Report Packet...")
 
         # 7. Generate Campaign Report Packet
-        from datetime import datetime
         timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
         report_dir = f"Reports/Campaign_{timestamp}"
         os.makedirs(f"{report_dir}/All_Resumes", exist_ok=True)
@@ -266,14 +239,22 @@ async def analyze_resumes(
             os.makedirs(f"{report_dir}/Rejected_Resumes", exist_ok=True)
             rej_filenames = [c['filename'] for c in rejected_candidates]
             for fname, content in file_buffers.items():
-                if fname in rej_filenames:
                     with open(f"{report_dir}/Rejected_Resumes/{fname}", "wb") as f:
                         f.write(content)
+
+        # Save NOT Selected (But Valid) Resumes
+        if remaining_candidates:
+             os.makedirs(f"{report_dir}/Not_Selected_Resumes", exist_ok=True)
+             rem_filenames = [c['filename'] for c in remaining_candidates]
+             for fname, content in file_buffers.items():
+                 if fname in rem_filenames:
+                     with open(f"{report_dir}/Not_Selected_Resumes/{fname}", "wb") as f:
+                         f.write(content)
         
-        # Generate Markdown from Structured Analysis
+        # Generate Markdown
         executive_summary = ""
         for item in img_analysis:
-            if item.get("filename") == "report": # Fallback case
+            if item.get("filename") == "report": 
                  executive_summary += f"{item.get('reasoning')}\n\n"
             else:
                 executive_summary += f"### 👤 {item.get('candidate_name', 'Unnamed')} ({item.get('status', 'Analyzed')})\n"
@@ -284,10 +265,9 @@ async def analyze_resumes(
                     executive_summary += "**⚠️ Weaknesses:**\n" + "\n".join([f"- {w}" for w in item.get("weaknesses")]) + "\n\n"
                 executive_summary += "---\n"
         
-        jd_source = jd_file.filename if jd_file else "Pasted Text"
         md_content = f"""# 🧬 RecruitAI Screening Report
 **Date:** {timestamp}
-**Job Description:** {jd_source}
+**Job Description:** {jd_source_name}
 
 ## 🎯 Executive Summary
 {executive_summary}
@@ -316,13 +296,73 @@ async def analyze_resumes(
             "candidates": final_results, 
             "rejected_count": len(rejected_candidates),
             "rejected_candidates": rejected_candidates,
-            "ai_analysis": img_analysis, # Return structured JSON!
+            "ai_analysis": img_analysis, 
             "top_candidates": top_candidates,
             "report_path": os.path.abspath(report_dir)
         }
-            
+
     except Exception as e:
-        logger.error(f"❌ ERROR: {str(e)}")
+        logger.error(f"❌ PIPELINE ERROR: {str(e)}")
+        raise e
+
+@app.post("/analyze")
+async def analyze_resumes(
+    jd_file: UploadFile = File(None),
+    jd_text_input: str = Form(None),
+    resume_files: List[UploadFile] = File(None),
+    start_date: str = Form(None),
+    end_date: str = Form(None),
+    top_n: int = Form(5)
+):
+    try:
+        # 1. Prepare JD
+        if jd_file:
+            logger.info(f"Processing JD File: {jd_file.filename}")
+            jd_bytes = await jd_file.read()
+            if jd_file.filename.endswith(".pdf"):
+                jd_text, _ = pdf_service.pdf_service.extract_text(jd_bytes)
+            else:
+                jd_text = jd_bytes.decode("utf-8")
+            jd_name = jd_file.filename
+        elif jd_text_input:
+            logger.info("Processing JD Text Input")
+            jd_text = jd_text_input
+            jd_name = "Pasted Text"
+        else:
+             raise HTTPException(status_code=400, detail="Job Description (File or Text) is required.")
+
+        file_buffers = {}
+
+        # 2. Source A: Manual Uploads
+        if resume_files:
+            logger.info(f"📥 Processing {len(resume_files)} Manual Uploads...")
+            for file in resume_files:
+                content = await file.read()
+                file_buffers[file.filename] = content
+
+        # 3. Source B: Gmail Fetch
+        if start_date and end_date:
+            logger.info(f"📧 Fetching Emails from {start_date} to {end_date}...")
+            gmail_resumes = gmail_service.gmail_service.fetch_resumes(start_date, end_date)
+            if gmail_resumes:
+                logger.info(f"   found {len(gmail_resumes)} resumes in Gmail.")
+                for item in gmail_resumes:
+                    # Avoid overwriting if same filename exists (append suffix if needed, but simple overwrite for now)
+                    file_buffers[f"[Email] {item['filename']}"] = item["content"]
+            else:
+                logger.warning("   No resumes found in Gmail for this range.")
+
+        # 4. Validation
+        if not file_buffers:
+             raise HTTPException(status_code=400, detail="No resumes provided! Upload files OR select a Date Range for Gmail.")
+            
+        logger.info(f"🚀 STARTING ANALYSIS: Total {len(file_buffers)} Resumes.")
+
+        # 5. Run Pipeline
+        return await _run_analysis_pipeline(jd_text, file_buffers, top_n, jd_name)
+
+    except Exception as e:
+        logger.error(f"Error in analyze: {str(e)}")
         return {"status": "error", "message": str(e)}
 
 if __name__ == "__main__":

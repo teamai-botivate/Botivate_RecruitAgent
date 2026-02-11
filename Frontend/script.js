@@ -17,8 +17,9 @@ function setupDrop(dropArea, callback) {
         callback(e.dataTransfer.files);
     });
     dropArea.addEventListener('click', (e) => {
-        if (e.target.tagName === 'TEXTAREA' || e.target.tagName === 'LABEL') return;
-        dropArea.querySelector('input').click();
+        // Prevent file upload when clicking textarea, label, or ANY input (date, checkbox, range, etc.)
+        if (e.target.tagName === 'TEXTAREA' || e.target.tagName === 'LABEL' || e.target.tagName === 'INPUT') return;
+        dropArea.querySelector('input[type="file"]').click();
     });
     dropArea.querySelector('input').addEventListener('change', (e) => {
         callback(e.target.files);
@@ -37,12 +38,42 @@ setupDrop(resumeDrop, (files) => {
     document.getElementById('resume-count').textContent = `✅ ${resumeFiles.length} resumes loaded`;
 });
 
+// Gmail Checkbox Logic
+const gmailCheckbox = document.getElementById('gmail-checkbox');
+const gmailInputs = document.getElementById('gmail-inputs');
+
+if (gmailCheckbox) {
+    gmailCheckbox.addEventListener('change', () => {
+        if (gmailCheckbox.checked) {
+            gmailInputs.classList.remove('hidden');
+        } else {
+            gmailInputs.classList.add('hidden');
+        }
+    });
+}
+
 // Analyze
 analyzeBtn.addEventListener('click', async () => {
     const jdText = document.getElementById('jd-text') ? document.getElementById('jd-text').value.trim() : "";
+    const startDate = document.getElementById('start-date').value;
+    const endDate = document.getElementById('end-date').value;
+    const useGmail = document.getElementById('gmail-checkbox') ? document.getElementById('gmail-checkbox').checked : false;
 
-    if ((!jdFile && !jdText) || resumeFiles.length === 0) {
-        alert("Please provide a JD (Text or File) and at least one resume!");
+    // Common Validation: JD Required
+    if (!jdFile && !jdText) {
+        alert("Please provide a Job Description (Paste Text or Upload File)!");
+        return;
+    }
+
+    // Validation: At least one source
+    if (resumeFiles.length === 0 && !useGmail) {
+        alert("Please upload resumes OR check 'Include Gmail Resumes'!");
+        return;
+    }
+
+    // Gmail Validation
+    if (useGmail && (!startDate || !endDate)) {
+        alert("Please select Start and End dates for Gmail search.");
         return;
     }
 
@@ -57,10 +88,18 @@ analyzeBtn.addEventListener('click', async () => {
     } else {
         formData.append('jd_text_input', jdText);
     }
+    formData.append('top_n', topNInput.value);
+
+    // Append Files
     resumeFiles.forEach(file => {
         formData.append('resume_files', file);
     });
-    formData.append('top_n', topNInput.value);
+
+    // Append Gmail Data if checked
+    if (useGmail) {
+        formData.append('start_date', startDate);
+        formData.append('end_date', endDate);
+    }
 
     try {
         const response = await fetch('http://localhost:8000/analyze', {
@@ -316,5 +355,3 @@ function renderResults(data) {
         tbody.appendChild(tr);
     });
 }
-
-
