@@ -36,7 +36,7 @@ function loadFormData() {
             }
         });
     }
-    
+
     // Attach auto-save ONLY to persistent fields
     persistentFields.forEach(id => {
         const el = document.getElementById(id);
@@ -70,7 +70,7 @@ function clearStep2Fields() {
 // --- Premium Select Transformation ---
 function initializeCustomSelects() {
     const selects = document.querySelectorAll('select');
-    
+
     selects.forEach(select => {
         // Create Wrapper
         const wrapper = document.createElement('div');
@@ -83,7 +83,7 @@ function initializeCustomSelects() {
         const trigger = document.createElement('div');
         trigger.className = 'custom-select-trigger';
         trigger.innerHTML = `<span>${select.options[select.selectedIndex].text}</span> <i data-lucide="chevron-down" style="width:16px; height:16px;"></i>`;
-        
+
         const optionsContainer = document.createElement('div');
         optionsContainer.className = 'custom-select-options';
 
@@ -97,11 +97,11 @@ function initializeCustomSelects() {
                 trigger.querySelector('span').textContent = option.text;
                 optionsContainer.classList.remove('show');
                 trigger.classList.remove('open');
-                
+
                 // Active state
                 optionsContainer.querySelectorAll('.custom-select-option').forEach(o => o.classList.remove('selected'));
                 opt.classList.add('selected');
-                
+
                 // Trigger change event for any listeners
                 select.dispatchEvent(new Event('change'));
             });
@@ -115,7 +115,7 @@ function initializeCustomSelects() {
         trigger.addEventListener('click', (e) => {
             e.stopPropagation();
             const isOpen = optionsContainer.classList.contains('show');
-            
+
             // Close all other dropdowns
             document.querySelectorAll('.custom-select-options').forEach(o => o.classList.remove('show'));
             document.querySelectorAll('.custom-select-trigger').forEach(o => o.classList.remove('open'));
@@ -139,7 +139,7 @@ function initializeCustomSelects() {
 // --- Form Submission ---
 jdForm.addEventListener('submit', async (e) => {
     e.preventDefault();
-    
+
     // Save Step 1 data
     savePersistentData();
 
@@ -161,14 +161,14 @@ jdForm.addEventListener('submit', async (e) => {
     };
 
     try {
-        const response = await fetch('http://127.0.0.1:8001/generate-jd', {
+        const response = await fetch('http://127.0.0.1:8000/jd-api/generate-jd', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(formData)
         });
 
         const result = await response.json();
-        
+
         if (result.status === 'success') {
             displayResult(result.jd);
             clearStep2Fields(); // Reset Step 2 after successful generation
@@ -228,7 +228,7 @@ downloadBtn.addEventListener('click', () => {
 // --- Mock AI Generator Logic ---
 function mockGenerateJD(data) {
     const { companyName, roleTitle, experience, location, industry, workMode, employmentType } = data;
-    
+
     return `1. COMPANY NAME: ${companyName}
 
 2. JOB TITLE: ${roleTitle} (${experience})

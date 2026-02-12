@@ -12,7 +12,9 @@ logger = logging.getLogger(__name__)
 from dotenv import load_dotenv
 # Load environment variables from project root
 logger.info("Attempting to load environment variables...")
-load_dotenv(dotenv_path="../../.env")
+current_dir = os.path.dirname(os.path.abspath(__file__))
+project_root = os.path.dirname(os.path.dirname(current_dir))
+load_dotenv(dotenv_path=os.path.join(project_root, ".env"))
 logger.info(f"GROQ_API_KEY Found: {'Yes' if os.getenv('GROQ_API_KEY') else 'No'}")
 
 from agent import generate_jd_ai

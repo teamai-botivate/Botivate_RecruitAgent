@@ -466,7 +466,19 @@ async def _run_async_analysis(job_id: str, jd_text: str, source_dir: str, top_n:
                 c['score']['original_score'] = old_score
                 
                 # Merge qualitative data (reasoning, strengths)
+                # Merge qualitative data (reasoning, strengths)
                 c.update(ai_data)
+
+                # FALLBACK: If AI returned empty skills, use Keyword Match
+                if not c.get('extracted_skills'):
+                    c['extracted_skills'] = c['score'].get('matched_keywords', [])
+
+                # FALLBACK: If AI returned 0 exp, try to use Regex Exp (if stored) or keep 0
+                # We don't have regex exp explicitly in 'score' dict usually, but let's check
+                if not c.get('years_of_experience') or c.get('years_of_experience') == 0:
+                     # If we had regex exp in score, use it. But usually we don't store it separate from score calc.
+                     # Let's AT LEAST ensure it's not None
+                     c['years_of_experience'] = 0.0
                 
                 logger.info(f"   🤖 Re-Ranked {fname}: {old_score} -> {new_score} (Bonus: {bonus})")
                 

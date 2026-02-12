@@ -128,7 +128,8 @@ def extract_name(text: str, filename: str = "") -> str:
         "manager", "analyst", "consultant", "intern", "fresher", "date", "place",
         "mobile", "phone", "email", "address", "linkedin", "github", "portfolio",
         "declarations", "objective", "name", "javascript", "java", "python", "sql",
-        "html", "css", "react", "node", "aws", "docker", "git", "linux", "windows"
+        "html", "css", "react", "node", "aws", "docker", "git", "linux", "windows",
+        "da", "experienced", "yrs", "year", "years"
     }
 
     # 1. Spacy NLP (Best)
@@ -160,14 +161,15 @@ def extract_name(text: str, filename: str = "") -> str:
         # Remove extension
         clean = filename.rsplit('.', 1)[0]
         
-        # Remove brackets [Email] [Extracted]
+        # Remove brackets [Email] [Extracted] or (4)
         clean = re.sub(r'\[.*?\]', '', clean)
+        clean = re.sub(r'\(.*?\)', '', clean) # Remove (4) or (copy)
         
         # Replace separators
-        clean = clean.replace("_", " ").replace("-", " ")
+        clean = clean.replace("_", " ").replace("-", " ").replace("+", " ").replace(",", " ")
         
         # Remove noise words and digits
-        clean = re.sub(r'\b(resume|cv|file|copy|new|updated|final|draft|\d+)\b', '', clean, flags=re.IGNORECASE)
+        clean = re.sub(r'\b(resume|cv|file|copy|new|updated|final|draft|exp|experienced|da|yrs|years|\d+)\b', '', clean, flags=re.IGNORECASE)
         
         # Collapse spaces
         clean = re.sub(r'\s+', ' ', clean).strip()

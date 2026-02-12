@@ -3,7 +3,10 @@ from groq import Groq
 from dotenv import load_dotenv
 
 # Load environment variables
-load_dotenv(dotenv_path="../../.env")
+# Load environment variables
+current_dir = os.path.dirname(os.path.abspath(__file__))
+project_root = os.path.dirname(os.path.dirname(current_dir))
+load_dotenv(dotenv_path=os.path.join(project_root, ".env"))
 
 client = Groq(api_key=os.getenv("GROQ_API_KEY"))
 

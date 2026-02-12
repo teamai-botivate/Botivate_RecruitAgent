@@ -6,7 +6,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>RecruitAI | Next-Gen AI ATS</title>
     <link rel="stylesheet" href="styles.css">
-    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&display=swap"
+        rel="stylesheet">
     <script src="https://unpkg.com/lucide@latest"></script>
 </head>
 
@@ -25,8 +26,9 @@
             <div class="nav-links">
                 <div class="workflow-stepper">
                     <div class="step active" data-step="1">Resume Screening</div>
-                    <a href="../JD_Generator/frontend/index.html" class="step" data-step="2">JD Generator</a>
-                    <a href="../Aptitude_Generator/frontend/index.html" class="step" data-step="3">Aptitude generator</a>
+                    <a href="http://localhost:8000/jd-tools/" class="step" data-step="2">JD Generator</a>
+                    <a href="../Aptitude_Generator/frontend/index.html" class="step" data-step="3">Aptitude
+                        generator</a>
                 </div>
             </div>
             <div class="nav-actions">
@@ -87,7 +89,7 @@
                                 <span class="slider"></span>
                                 <span class="label-text">Enable Gmail Sync <i data-lucide="mail"></i></span>
                             </label>
-                            
+
                             <div id="gmail-inputs" class="gmail-date-picker hidden">
                                 <div class="date-group">
                                     <div class="input-field">
@@ -149,8 +151,10 @@
                     <header class="report-header">
                         <h2>Predictive Talent Insights</h2>
                         <div class="filter-pills">
-                            <button id="filter-shortlist" class="filter-pill active" onclick="switchAnalysisFilter('shortlist')">Shortlisted</button>
-                            <button id="filter-rejected" class="filter-pill" onclick="switchAnalysisFilter('rejected')">Rejected</button>
+                            <button id="filter-shortlist" class="filter-pill active"
+                                onclick="switchAnalysisFilter('shortlist')">Shortlisted</button>
+                            <button id="filter-rejected" class="filter-pill"
+                                onclick="switchAnalysisFilter('rejected')">Rejected</button>
                         </div>
                     </header>
                     <div id="ai-report-content" class="staggered-grid">
