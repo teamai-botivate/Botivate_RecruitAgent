@@ -15,9 +15,16 @@ logger = logging.getLogger(__name__)
 class GmailService:
     def __init__(self):
         self.creds = None
+        token_path = 'token.json'
+        if not os.path.exists(token_path):
+             # Try checking parent directory
+             parent_token = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))), 'token.json')
+             if os.path.exists(parent_token):
+                 token_path = parent_token
+                 
         # Verify credentials existence
-        if os.path.exists('token.json'):
-            self.creds = Credentials.from_authorized_user_file('token.json', SCOPES)
+        if os.path.exists(token_path):
+            self.creds = Credentials.from_authorized_user_file(token_path, SCOPES)
         
         # If no valid credentials available, we need user login flow (Interactive)
         # Note: This requires a browser interaction on first run.
@@ -30,8 +37,16 @@ class GmailService:
                     self.creds = None
             
             if not self.creds:
-                if os.path.exists('credentials.json'):
-                    flow = InstalledAppFlow.from_client_secrets_file('credentials.json', SCOPES)
+                creds_path = 'credentials.json'
+                if not os.path.exists(creds_path):
+                    # Try checking parent directory (Repo Root if running from Backend/)
+                    # services -> app -> Backend -> Root (Resume-Screening-Agent)
+                    parent_creds = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))), 'credentials.json')
+                    if os.path.exists(parent_creds):
+                        creds_path = parent_creds
+
+                if os.path.exists(creds_path):
+                    flow = InstalledAppFlow.from_client_secrets_file(creds_path, SCOPES)
                     # Run logic typically requires local server, might be tricky in headless/agent env.
                     # For local desktop user, run_local_server() works.
                     # self.creds = flow.run_local_server(port=0)
@@ -44,12 +59,29 @@ class GmailService:
 
     def authenticate_interactive(self):
         """Must be called manually to generate token.json if missing."""
-        if not os.path.exists('credentials.json'):
-             raise FileNotFoundError("Please place 'credentials.json' in the root directory.")
+        creds_path = 'credentials.json'
+        
+        # 1. Check current directory
+        if not os.path.exists(creds_path):
+             # 2. Check Repo Root
+             parent_creds = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))), 'credentials.json')
+             if os.path.exists(parent_creds):
+                 creds_path = parent_creds
+        
+        if not os.path.exists(creds_path):
+             raise FileNotFoundError(f"Please place 'credentials.json' in the root directory. Searched in: {os.path.abspath('credentials.json')} and {os.path.abspath(parent_creds) if 'parent_creds' in locals() else 'Parent Dir'}")
              
-        flow = InstalledAppFlow.from_client_secrets_file('credentials.json', SCOPES)
+        flow = InstalledAppFlow.from_client_secrets_file(creds_path, SCOPES)
         self.creds = flow.run_local_server(port=0)
-        with open('token.json', 'w') as token:
+        
+        # Save token in the same directory as credentials
+        creds_dir = os.path.dirname(creds_path)
+        if creds_dir:
+            token_path = os.path.join(creds_dir, 'token.json')
+        else:
+             token_path = 'token.json'
+            
+        with open(token_path, 'w') as token:
             token.write(self.creds.to_json())
         return self.creds
 

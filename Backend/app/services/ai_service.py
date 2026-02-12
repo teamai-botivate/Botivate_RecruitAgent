@@ -1,5 +1,5 @@
-
 import os
+import json
 from groq import Groq
 from ..core.config import get_settings
 
@@ -7,8 +7,16 @@ settings = get_settings()
 
 class AIService:
     def __init__(self):
-        self.client = Groq(api_key=settings.groq_api_key)
-        self.model = settings.llm_model
+        # Fallback to OpenAI if Groq is missing, but prefer Groq
+        if settings.groq_api_key:
+            self.client = Groq(api_key=settings.groq_api_key)
+            self.provider = "groq"
+        else:
+            from openai import OpenAI
+            self.client = OpenAI(api_key=settings.openai_api_key)
+            self.provider = "openai"
+            
+        self.model = settings.llm_model # "llama-3.3-70b-versatile"
 
     def query(self, prompt: str, temperature: float = 0.3, json_mode: bool = False) -> str:
         try:
@@ -23,12 +31,15 @@ class AIService:
             }
             
             if json_mode:
-                kwargs["response_format"] = {"type": "json_object"}
+                if self.provider == "groq":
+                    kwargs["response_format"] = {"type": "json_object"}
+                else:
+                    kwargs["response_format"] = {"type": "json_object"}
 
             completion = self.client.chat.completions.create(**kwargs)
             return completion.choices[0].message.content.strip()
         except Exception as e:
-            print(f"Groq API Error: {e}")
+            print(f"AI API Error ({self.provider}): {e}")
             return ""
 
     def anonymize(self, text: str) -> str:

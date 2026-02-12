@@ -1,8 +1,21 @@
-
 from pydantic_settings import BaseSettings
 from functools import lru_cache
 import os
 import configparser
+from dotenv import load_dotenv
+
+# Explicitly load .env from parent directory if not found in current
+# Run from Backend/ -> .env is in ../.env
+# config.py is in Backend/app/core/config.py
+# 1. dirname -> Backend/app/core
+# 2. dirname -> Backend/app
+# 3. dirname -> Backend
+# 4. dirname -> Root (Resume-Screening-Agent)
+env_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))), ".env")
+if os.path.exists(env_path):
+    load_dotenv(env_path)
+config_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))), "config.ini")
+
 
 class Settings(BaseSettings):
     # App Settings
@@ -11,7 +24,7 @@ class Settings(BaseSettings):
     
     # Models
     embedding_model: str = "sentence-transformers/all-MiniLM-L6-v2"
-    llm_model: str = "llama-3.3-70b-versatile"
+    llm_model: str = "gpt-4o"
     
     # Scoring Weights (Default - Can be updated dynamically)
     keyword_weight: int = 25
@@ -40,6 +53,11 @@ class Settings(BaseSettings):
     # API Keys
     groq_api_key: str = os.getenv("GROQ_API_KEY", "")
     huggingface_api_token: str = os.getenv("HUGGINGFACE_API_TOKEN", "")
+    openai_api_key: str = os.getenv("OPENAI_API_KEY", "")
+
+    # Models (override default)
+    llm_model: str = "llama-3.3-70b-versatile"
+
 
     class Config:
         env_file = ".env"

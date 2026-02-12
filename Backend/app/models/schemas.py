@@ -29,7 +29,12 @@ class ProcessingStatus(BaseModel):
 class CandidateAnalysis(BaseModel):
     filename: str
     candidate_name: str
+    email: Optional[str] = "Not Found"
+    phone: Optional[str] = "Not Found"
+    years_of_experience: float = 0
+    extracted_skills: List[str] = []
     status: str # "Recommended", "Potential", or "Rejected"
+    achievement_bonus: Optional[int] = 0
     reasoning: str
     strengths: List[str]
     weaknesses: List[str]
@@ -37,3 +42,11 @@ class CandidateAnalysis(BaseModel):
 
 class LLMOutput(BaseModel):
     candidates: List[CandidateAnalysis]
+
+class JobStatusResponse(BaseModel):
+    job_id: str
+    status: str  # "processing", "completed", "error"
+    progress: int  # 0-100
+    current_step: str
+    result: Optional[Dict[str, Any]] = None
+    error: Optional[str] = None

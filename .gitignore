@@ -40,3 +40,7 @@ desktop.ini
 credentials.json
 token.json
 client_secret_*.json
+
+# Temporary Directories
+temp/
+__pycache__/
