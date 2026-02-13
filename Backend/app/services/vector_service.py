@@ -29,11 +29,20 @@ class VectorService:
         """Perform semantic search."""
         return self.db.similarity_search_with_score(query, k=k)
 
-    def check_semantic_skills(self, resume_text: str, skills: list[str], threshold: float = 0.38) -> tuple[list, list]:
+    def check_semantic_skills(
+        self, 
+        resume_text: str, 
+        skills: list[str], 
+        threshold: float = 0.38,
+        precomputed_skill_vectors: dict = None
+    ) -> tuple[list, list]:
         """
         Hybrid Check:
         1. Exact Substring Match (Fast & 100% accurate for explicit skills)
         2. Vector Semantic Match (Backup for implied skills)
+        
+        Args:
+            precomputed_skill_vectors: Dict {skill_name: numpy_vector} (Optional Optimization)
         """
         if not skills:
             return [], []
@@ -62,7 +71,7 @@ class VectorService:
         
         # If everything found, return early
         if not missing_candidates:
-            return skills, []
+            return list(found), []
             
         # 2. Semantic Backup (Vector Search) for tricky/implied skills
         # Smart Splitter: Handle Bullets, Newlines, Pipes
@@ -74,8 +83,24 @@ class VectorService:
              return list(found), missing_candidates
              
         try:
+            # Embed Resume Sentences (Unavoidable per candidate)
             sent_vecs = self.embeddings.embed_documents(sentences)
-            skill_vecs = self.embeddings.embed_documents(missing_candidates)
+            
+            # Prepare Skill Vectors
+            # Use Pre-Computed if available, else Compute
+            skill_vecs = []
+            
+            if precomputed_skill_vectors:
+                # Optimized Path
+                for skill in missing_candidates:
+                    vec = precomputed_skill_vectors.get(skill)
+                    if vec is None:
+                        # Fallback compute if missing from cache
+                        vec = self.embeddings.embed_query(skill)
+                    skill_vecs.append(vec)
+            else:
+                # Slow Path (Re-Compute every time)
+                skill_vecs = self.embeddings.embed_documents(missing_candidates)
             
             # Convert to numpy
             sent_matrix = np.array(sent_vecs)
@@ -88,7 +113,8 @@ class VectorService:
                 skill_vec = skill_vec / (skill_norm + 1e-9)
                 
                 # Check against ALL sentences
-                similarities = np.dot(skill_vec, sent_matrix.T)
+                # Optimization: Matrix Multiplication (Dot Product)
+                similarities = np.dot(sent_matrix, skill_vec)
                 best_match_score = np.max(similarities)
                 
                 if best_match_score >= threshold:
@@ -104,24 +130,38 @@ class VectorService:
         
         return final_found, final_missing
 
-    def reset(self):
-        """Clear the vector database completely."""
+    def check_existing_hashes(self, hashes: list[str]) -> set:
+        """
+        Check which of the provided hashes already exist in the vector store.
+        Returns a set of existing hashes.
+        """
+        if not self.db or not hashes:
+            return set()
+            
         try:
-            # Delete collection content
-            if self.db:
-                try:
-                    self.db.delete_collection()
-                except Exception as e:
-                    pass # Collection might not exist, ignore
-            
-            self.db = None
-            
-            # Re-initialize clean
-            self.db = Chroma(
-                persist_directory=self.persist_directory,
-                embedding_function=self.embeddings
+            # Efficiently query metadata for these hashes
+            # Chroma 'get' supports filtering
+            result = self.db.get(
+                where={"file_hash": {"$in": hashes}},
+                include=["metadatas"]
             )
+            
+            existing = set()
+            for meta in result['metadatas']:
+                if meta and 'file_hash' in meta:
+                    existing.add(meta['file_hash'])
+            return existing
+            
         except Exception as e:
-            print(f"Vector DB Reset Error: {e}")
+            # If DB is empty or error, assume nothing exists
+            return set()
+
+    def reset(self):
+        """
+        Deprecated: Do NOT clear the DB anymore. 
+        We use persistent updates now.
+        Just log a warning if called.
+        """
+        pass
 
 vector_service = VectorService()

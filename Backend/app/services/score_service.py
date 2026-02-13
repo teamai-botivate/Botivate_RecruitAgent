@@ -64,11 +64,6 @@ def calculate_score(resume_text: str, jd_data: dict, semantic_score: float, page
             else:
                 missing.append(kw)
                 
-    score_keywords = 0 # Disabled
-        
-    breakdown["matched_keywords"] = matched
-    breakdown["missing_keywords"] = missing
-    
     # C. Experience Match (30 Points) - Seniority
     req_years = jd_data.get("required_years", 0)
     if req_years == 0: req_years = 2 # Default assumption
@@ -76,13 +71,28 @@ def calculate_score(resume_text: str, jd_data: dict, semantic_score: float, page
     exp_ratio = min(1.0, cand_years / req_years)
     score_experience = exp_ratio * 30
     
+    # B. Keyword Analysis (30 Points) - Critical Skills
+    # Calculate percentage of keywords present
+    if len(jd_kws) > 0:
+        match_ratio = len(matched) / len(jd_kws)
+    else:
+        match_ratio = 0
+        
+    score_keywords = match_ratio * 30 # Max 30 points
+        
+    breakdown["matched_keywords"] = matched
+    breakdown["missing_keywords"] = missing
+    
     # D. Structure (0 Points) - Ignored
     score_struct = 0
     resume_lower = resume_text.lower()
     
     # --- FINAL TOTAL ---
-    # Semantic (70) + Experience (30) ONLY.
-    total_score = score_semantic + score_experience
+    # Unified Formula: Semantic (40) + Keywords (30) + Experience (30)
+    # This prevents Data Analysts (High Semantic, Low Keywords) from beating Backend Devs.
+    score_semantic = semantic_score * 40 # Reduced from 70
+    
+    total_score = score_semantic + score_keywords + score_experience
     total_score = max(0, min(100, total_score)) # Clamp 0-100
     
     breakdown["total"] = round(total_score, 1)

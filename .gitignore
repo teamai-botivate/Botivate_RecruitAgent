@@ -44,3 +44,11 @@ client_secret_*.json
 # Temporary Directories
 temp/
 __pycache__/
+
+# Secrets (CRITICAL)
+client_secret.json
+Backend/client_secret.json
+tokens/
+Backend/tokens/
+debug_last_prompt.txt
+Backend/debug_last_prompt.txt

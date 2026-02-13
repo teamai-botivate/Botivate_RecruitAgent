@@ -14,7 +14,8 @@ from datetime import datetime
 warnings.filterwarnings("ignore", category=DeprecationWarning)
 
 from .core.config import get_settings
-from .services import pdf_service, vector_service, ai_service, utils, gmail_service
+from .services import pdf_service, vector_service, ai_service, utils
+from .services.gmail_fetch_service import gmail_fetch_service
 from .services.jd_extractor import jd_extractor
 from .services.score_service import calculate_score
 from .models.schemas import LLMOutput, JobStatusResponse
@@ -96,7 +97,10 @@ async def _run_async_analysis(job_id: str, jd_text: str, source_dir: str, top_n:
         
         logger.info(f"✅ JD Processed: {jd_data['title']} | Exp: {jd_data['required_years']}y | Skills: {len(jd_data['keywords'])}")
         
-        # 2. FILE INGESTION (Stream from Disk)
+        # 2. FILE INGESTION (Parallel Stream)
+        import hashlib
+        import concurrent.futures
+
         # Scan the temp directory for files
         all_files = [f for f in os.listdir(source_dir) if os.path.isfile(os.path.join(source_dir, f))]
         total_files = len(all_files)
@@ -108,68 +112,94 @@ async def _run_async_analysis(job_id: str, jd_text: str, source_dir: str, top_n:
         resume_texts = {}
         resume_pages = {}
         processed_candidates = []
+        file_hashes = {}  # Store {filename: md5_hash}
         
         # Batch Process to prevent Memory Spikes
-        update_job_progress(job_id, 15, f"Parsing {total_files} Resumes...")
+        update_job_progress(job_id, 15, f"Parsing {total_files} Resumes (Parallel)...")
         
-        for idx, fname in enumerate(all_files):
+        def process_single_file(fname):
+            """Worker function for parallel processing"""
             file_path = os.path.join(source_dir, fname)
             try:
+                # Read Content
                 if fname.lower().endswith(".pdf"):
                     with open(file_path, "rb") as f:
-                        text, pages = pdf_service.pdf_service.extract_text(f.read())
+                        file_bytes = f.read()
+                        text, pages = pdf_service.pdf_service.extract_text(file_bytes)
                 else:
                     with open(file_path, "r", encoding="utf-8", errors="ignore") as f:
+                        file_bytes = f.read().encode('utf-8')
                         text = f.read()
                         pages = 1
                 
+                # Calculate Hash
+                file_hash = hashlib.md5(file_bytes).hexdigest()
+                
                 clean_text = utils.clean_text(text)
-                resume_texts[fname] = clean_text
-                resume_pages[fname] = pages
                 
                 # IMMEDIATE SCORING (Pass 1 - The Fast Scan)
-                # Calculate raw score WITHOUT semantic embedding first
                 score_data = calculate_score(clean_text, jd_data, semantic_score=0.0, page_count=pages)
                 
-                logger.info(f"   📄 Parsed: {fname} ({len(clean_text)} chars) | Pages: {pages}")
+                return {
+                    "status": "success",
+                    "fname": fname,
+                    "text": clean_text,
+                    "pages": pages,
+                    "hash": file_hash,
+                    "score_data": score_data
+                }
+            except Exception as e:
+                return {"status": "error", "fname": fname, "error": str(e)}
+
+        # Run Parallel
+        with concurrent.futures.ThreadPoolExecutor(max_workers=5) as executor:
+            future_to_file = {executor.submit(process_single_file, f): f for f in all_files}
+            
+            for idx, future in enumerate(concurrent.futures.as_completed(future_to_file)):
+                result = future.result()
+                fname = result['fname']
+                
+                if result['status'] == 'error':
+                    logger.error(f"Error reading {fname}: {result['error']}")
+                    continue
+                
+                # Success
+                text = result['text']
+                pages = result['pages']
+                score_data = result['score_data']
+                file_hashes[fname] = result['hash']
+                
+                resume_texts[fname] = text
+                resume_pages[fname] = pages
+                
+                logger.info(f"   📄 Parsed: {fname} ({len(text)} chars) | Pages: {pages}")
 
                 if score_data.get("is_rejected"):
                      reason = score_data.get("rejection_reason", "Unknown")
                      logger.warning(f"   ❌ REJECTED (Hard Rule): {fname} | Reason: {reason}")
                      processed_candidates.append({
                          "filename": fname,
-                         "name": utils.extract_name(clean_text, fname),
-                         "score": score_data, # Rejected details inside
-                         "status": "Rejected"
+                         "name": utils.extract_name(text, fname),
+                         "score": score_data, 
+                         "status": "Rejected",
+                         "file_hash": result['hash']
                      })
                 else:
-                    logger.info(f"   🧮 Raw Score: {fname} | Total: {score_data['total']:.1f} (Key: {score_data['keyword_score']:.1f}, Exp: {score_data['experience_score']:.1f})")
-                    logger.info(f"      ✅ Found: {', '.join(score_data.get('matched_keywords', []))}")
-                    logger.info(f"      ❌ Missing: {', '.join(score_data.get('missing_keywords', []))}")
-                    
-                    # Pre-populate fields so UI is never empty even if AI fails later
                     processed_candidates.append({
                         "filename": fname,
-                         "name": utils.extract_name(clean_text, fname),
+                         "name": utils.extract_name(text, fname),
                          "score": score_data,
-                         "text": clean_text,
+                         "text": text,
                          "status": "Pending",
-                         # CRITICAL FIX: Ensure these fields exist from Step 1
                          "extracted_skills": score_data.get('matched_keywords', []),
-                         # If calculate_score extracts years, use it; otherwise 0.
-                         # Assuming calculate_score might return 'experience_years' or we rely on utils separately.
-                         # For now, simplistic approach:
-                         "years_of_experience": 0.0 
+                         "years_of_experience": 0.0,
+                         "file_hash": result['hash']
                     })
-
-            except Exception as e:
-                logger.error(f"Error reading {fname}: {e}")
-            
-            # Progress Update (15% to 50%)
-            if idx % 5 == 0:
-                prog = 15 + int((idx / total_files) * 35) 
-                update_job_progress(job_id, prog, f"Parsed {idx+1}/{total_files} Resumes")
-
+                
+                # Progress Update
+                if idx % 5 == 0:
+                    prog = 15 + int((idx / total_files) * 35) 
+                    update_job_progress(job_id, prog, f"Parsed {idx+1}/{total_files} Resumes")
 
 
         # 3. VECTOR ANALYSIS (PURE SEMANTIC - ALL VALID CANDIDATES)
@@ -177,37 +207,90 @@ async def _run_async_analysis(job_id: str, jd_text: str, source_dir: str, top_n:
         valid_candidates = [c for c in processed_candidates if not c['score'].get('is_rejected', False)]
         rejected_candidates = [c for c in processed_candidates if c['score'].get('is_rejected', False)]
         
-        # Log Pass 1 Results
-        logger.info(f"   🛑 Pass 1 (Page Filter) Complete: {len(processed_candidates)} Processed. (Valid: {len(valid_candidates)} | Rejected: {len(rejected_candidates)})")
+        logger.info(f"   🛑 Pass 1 (Page Filter) Complete: {len(processed_candidates)} Processed. (Valid: {len(valid_candidates)})")
+
+        # 3. PASS 2: ROLE FILTERING (Semantic - Zero Cost)
+        # Filter resumes by job title match BEFORE expensive AI analysis
+        from .services.role_matcher import detect_and_match_role, get_text_embedding
+        
+        # Use LLM extracted title directly
+        jd_title = jd_data.get("title", "Unknown Role")
+        
+        logger.info(f"   🎯 Pass 2: Filtering resumes for role '{jd_title}'...")
+        
+        # OPTIMIZATION: Embed JD Title ONCE to save time
+        jd_title_vector = get_text_embedding(jd_title)
+
+        role_matched = []
+        role_skipped = []
+        role_unclear = []
+        
+        for candidate in valid_candidates:
+            # Detect role from email + resume
+            try:
+                match_result = detect_and_match_role(
+                    jd_title=jd_title,
+                    email_subject=candidate.get('email_subject', ''),
+                    email_body=candidate.get('email_body', ''),
+                    resume_text=candidate['text'],
+                    threshold=0.45,  # Semantic similarity threshold (0.45 captures 'MIS' ~ 'Data Analyst')
+                    jd_title_embedding=jd_title_vector # PASS PRE-COMPUTED VECTOR
+                )
+            except Exception as e:
+                logger.error(f"Role Match Error for {candidate['filename']}: {e}")
+                match_result = {"is_match": True, "detected_role": "Error", "similarity": 0.0}
+            
+            # Store detection metadata
+            candidate['applied_for'] = match_result.get('detected_role') or "Unknown"
+            candidate['role_match'] = match_result
+            
+            # Categorize
+            if match_result['is_match']:
+                role_matched.append(candidate)
+            elif match_result['detected_role']:
+                role_skipped.append(candidate)
+                candidate['score']['is_rejected'] = True
+                candidate['score']['rejection_reason'] = f"ROLE MISMATCH: Applied for '{match_result['detected_role']}' but JD is for '{jd_title}'"
+            else:
+                # If we can't detect role, give them a chance (process as normal)
+                role_unclear.append(candidate)
+        
+        logger.info(f"   📊 Role Filter: ✅ {len(role_matched)} matched | ❌ {len(role_skipped)} skipped (wrong role) | ⚠️ {len(role_unclear)} unclear")
+        
+        # Combine matched + unclear for further processing
+        vector_candidates = role_matched + role_unclear
 
         update_job_progress(job_id, 30, "Semantic Analysis (Whole JD vs Resumes)...")
         
-        vector_candidates = valid_candidates 
-        
         if not vector_candidates:
-             logger.warning("No candidates passed the Page Count Filter.")
+             logger.warning("No candidates passed the Role Filter.")
         else:
             logger.info(f"   🧠 Running Pure Semantic Match on {len(vector_candidates)} candidates...")
             
-            # Reset & Add Texts
             try:
-                # We assume vector_service is available globally or imported
-                # If using Chroma ephemeral, we might need a fresh client or reset
-                # For this MVP, we just add new texts. Ideally we clears old ones but checks are ephemeral.
-                docs = [c['text'] for c in vector_candidates]
-                metas = [{"filename": c['filename']} for c in vector_candidates]
+                # 1. Identify which files need embedding (New Hashes)
+                candidate_hashes = [c['file_hash'] for c in vector_candidates]
+                existing_hashes = vector_service.vector_service.check_existing_hashes(candidate_hashes)
                 
-                # Check for reset method or just re-instantiate if needed, assuming add_texts works
-                # (Ignoring exact implementation details of vector_service wrapper, focusing on flow)
+                new_docs = []
+                new_metas = []
                 
-                # 1. Reset DB to ensure fresh start for this job
-                # Note: vector_service is the module, vector_service.vector_service is the instance
-                vector_service.vector_service.reset()
+                for c in vector_candidates:
+                    if c['file_hash'] not in existing_hashes:
+                        new_docs.append(c['text'])
+                        new_metas.append({
+                            "filename": c['filename'], 
+                            "file_hash": c['file_hash']
+                        })
                 
-                # 2. Add Texts
-                vector_service.vector_service.add_texts(docs, metas)
+                # 2. Add ONLY new texts
+                if new_docs:
+                    logger.info(f"   📥 Embedding {len(new_docs)} new resumes into Vector DB...")
+                    vector_service.vector_service.add_texts(new_docs, new_metas)
+                else:
+                    logger.info("   ⏩ All resumes already in Vector DB. Skipping embedding.")
                 
-                # 3. Search
+                # 3. Search matched results
                 results = vector_service.vector_service.search(jd_clean, k=len(vector_candidates))
                 
                 # Debug: Log raw distances
@@ -223,6 +306,19 @@ async def _run_async_analysis(job_id: str, jd_text: str, source_dir: str, top_n:
                     sim = max(0.0, 1.0 - (dist / 2))
                     sem_map[doc.metadata['filename']] = sim
 
+                # OPTIMIZATION: Pre-compute Skill Vectors ONCE
+                jd_keywords = jd_data.get('keywords', [])
+                skill_vectors_cache = {}
+                if jd_keywords:
+                    try:
+                        logger.info(f"   ⚡ Pre-computing vectors for {len(jd_keywords)} skills...")
+                        # Batch embed all skills
+                        _vecs = vector_service.vector_service.embeddings.embed_documents(jd_keywords)
+                        # Create Map {skill: vector}
+                        skill_vectors_cache = {k: v for k, v in zip(jd_keywords, _vecs)}
+                    except Exception as e:
+                        logger.error(f"Skill Vector Pre-compute Failed: {e}")
+
                 for c in vector_candidates:
                     fname = c['filename']
                     
@@ -235,14 +331,16 @@ async def _run_async_analysis(job_id: str, jd_text: str, source_dir: str, top_n:
                     full_text = resume_texts.get(fname, "")
                     
                     try:
+                        # Pass the pre-computed cache
                         found_skills, missing_skills = vector_service.vector_service.check_semantic_skills(
                             full_text, 
-                            jd_data['keywords'], 
-                            threshold=0.45
+                            jd_keywords, 
+                            threshold=0.45,
+                            precomputed_skill_vectors=skill_vectors_cache
                         )
                     except Exception as e:
                         logger.error(f"   ⚠️ Skill Check Error for {fname}: {e}")
-                        found_skills, missing_skills = [], jd_data['keywords']
+                        found_skills, missing_skills = [], jd_keywords
                     
                     # 3. Update Scoring Data
                     c['score']['matched_keywords'] = found_skills
@@ -278,9 +376,8 @@ async def _run_async_analysis(job_id: str, jd_text: str, source_dir: str, top_n:
         update_job_progress(job_id, 75, f"Identified Top {len(top_candidates)} Candidates. Running AI Analysis...")
 
         # 4. AI ANALYSIS (Pass 3 - The Deep Dive)
-        # Smart Selection: Analyze Top N * 2 candidates (Capped at 25)
-        # This gives borderline candidates (e.g. Rank #6) a chance to jump into Top 5 if AI likes them.
-        analysis_limit = min(25, top_n * 2)
+        # Smart Selection: Analyze Top N + 2 candidates (Conservative to avoid Rate Limits)
+        analysis_limit = min(15, top_n + 5) 
         if len(valid_candidates) < analysis_limit:
             ai_target = valid_candidates
         else:
@@ -290,56 +387,56 @@ async def _run_async_analysis(job_id: str, jd_text: str, source_dir: str, top_n:
         
         img_analysis = []
         
-        # BATCH PROCESSING (Avoid Token Limits / Truncation)
-        BATCH_SIZE = 5
-        
+        # INDIVIDUAL PROCESSING (1 Resume = 1 AI Call)
+        BATCH_SIZE = 1
+        import time 
+
         for i in range(0, len(ai_target), BATCH_SIZE):
             batch = ai_target[i : i+BATCH_SIZE]
-            logger.info(f"   🤖 Processing AI Batch {i//BATCH_SIZE + 1} ({len(batch)} candidates)...")
+            c = batch[0] # Single candidate
+            logger.info(f"   🤖 Processing AI for: {c['filename']}...")
             
-            # Construct Batch Prompt
-            candidates_text = ""
-            for c in batch:
-                 anon_text = ai_service.ai_service.anonymize(c['text'])
-                 # LOG EXTRACTED TEXT PREVIEW (With Exp Info)
-                 raw_exp = c['score'].get('years_of_experience', 0)
-                 logger.info(f"   📄 [DEBUG] {c['filename']} | Base Exp: {raw_exp}y | Text Preview:\n{anon_text[:500]}...\n")
-                 
-                 candidates_text += f"\n--- Candidate ---\nFilename: {c['filename']}\nScore: {c['score']['total']}\nContent:\n{anon_text[:2500]}\n"
+            # TOKEN SAVING: Truncate very long resumes to ~6000 chars (approx 1500 tokens)
+            source_text = c['text']
+            if len(source_text) > 8000:
+                logger.warning(f"   ⚠️ Resume too long ({len(source_text)} chars). Truncating to 8000.")
+                source_text = source_text[:8000] + "\n[...Truncated...]"
 
-            if not candidates_text: continue
-
+            anon_text = ai_service.ai_service.anonymize(source_text) 
+            
+            # LOG EXTRACTED TEXT PREVIEW (With Exp Info)
+            raw_exp = c['score'].get('years_of_experience', 0)
+            logger.info(f"   📄 [DEBUG] {c['filename']} | Base Exp: {raw_exp}y | Full Text Len: {len(anon_text)}")
+            
             prompt = f"""
-            You are a Senior Technical Recruiter. Analyze these {len(batch)} candidates for the Job Description below.
+            You are a Senior Technical Recruiter. Analyze this candidate for the Job Description below.
             
             JD Summary: {jd_clean[:1500]}
             
-            CANDIDATES:
-            {candidates_text}
+            CANDIDATE:
+            Filename: {c['filename']}
+            Score: {c['score']['total']}
+            Content:
+            {anon_text}
             
             INSTRUCTIONS:
             1. Evaluate relevance to the JD (Skills, Experience, Role Fit).
             2. EXTRACT DETAILS (CRITICAL):
                - "years_of_experience": Calculate ONLY from professional work history dates.
-                 * DO NOT count University/College duration (e.g. 2021-2025) as work experience.
+                 * DO NOT count University/College duration as work experience.
                  * Count Internships if labeled clearly.
-                 * Example: A 2025 graduate has ~0-1 years exp, NOT 4 years.
                - "extracted_skills": List of technical skills actually found.
-               - "email" and "phone": Extract EXACT text found. Do NOT redact. Do NOT use placeholders like "[EMAIL]". If not found, return "Not Found".
-            3. LOOK FOR HIDDEN GEMS: Check for Hackathons, Open Source (GitHub), Awards, Publications, or Complex Side Projects.
-            4. *CRITICAL*: Assign an 'achievement_bonus' (0-20 points) based on these hidden gems.
-               - 0: None
-               - 5-10: Good projects/certs
-               - 15-20: Hackathon winner, major open source contribution.
-            5. Classify status as "High Potential" or "Review Required".
-            6. YOU MUST RETURN A JSON OBJECT FOR ALL {len(batch)} CANDIDATES provided. Do not skip any.
-            7. For "hobbies_and_achievements", list SPECIFIC project names (e.g. "MyNovelList Backend") or stats (e.g. "500+ LeetCode"). Do not be generic.
+               - "email" and "phone": Extract EXACT text found. If not found, return "Not Found".
+             3. LOOK FOR HIDDEN GEMS: Check for Hackathons, Open Source (GitHub), Awards, Publications.
+             4. Assign "achievement_bonus" (0-20 points) for exceptional achievements.
+             5. "hobbies_and_achievements": A list of hobbies or key achievements. Return [] if none found.
+             6. "reasoning": A 1-line explanation of why this candidate was selected or rejected.
 
             OUTPUT FORMAT (Strict JSON):
             {{
               "candidates": [
                 {{
-                  "filename": "exact_filename.pdf",
+                  "filename": "{c['filename']}", 
                   "candidate_name": "Name",
                   "email": "email@example.com",
                   "phone": "+91...",
@@ -350,45 +447,60 @@ async def _run_async_analysis(job_id: str, jd_text: str, source_dir: str, top_n:
                   "reasoning": "...",
                   "strengths": ["..."],
                   "weaknesses": ["..."],
-                  "hobbies_and_achievements": ["Project X: ...", "Hackathon Winner"]
+                  "hobbies_and_achievements": []
                 }}
               ]
             }}
             Ensure the JSON is valid.
             """
             
-            # SAVE PROMPT TO FILE FOR DEBUGGING
-            with open("debug_last_prompt.txt", "w", encoding="utf-8") as f:
-                f.write(prompt)
-            logger.info("   💾 [DEBUG] Saved last prompt to 'debug_last_prompt.txt'")
+            max_retries = 2
+            success = False
+            
+            for attempt in range(max_retries):
+                try:
+                    # Call LLM (Strict Mode: temp=0)
+                    llm_response = ai_service.ai_service.query(prompt, json_mode=True, temperature=0.0)
+                    
+                    # LOG RAW RESPONSE
+                    # logger.info(f"   🤖 [DEBUG] AI Raw JSON Response:\n{llm_response}\n")
+                    
+                    # Parse Result
+                    json_str = llm_response
+                    match = re.search(r"```json(.*?)```", llm_response, re.DOTALL)
+                    if match: json_str = match.group(1).strip()
+                    elif "{" in llm_response:
+                        s = llm_response.find("{")
+                        e = llm_response.rfind("}")
+                        json_str = llm_response[s:e+1]
+                    
+                    parsed = LLMOutput.model_validate_json(json_str)
+                    
+                    # Ensure filename match (AI sometimes forgets)
+                    if parsed.candidates:
+                        parsed.candidates[0].filename = c['filename']
+                        batch_results = [parsed.candidates[0].model_dump()]
+                        img_analysis.extend(batch_results)
+                        logger.info(f"      ✅ Analyzed: {c['filename']}")
+                    
+                    success = True
+                    break 
 
-            try:
-                # Call LLM per batch
-                llm_response = ai_service.ai_service.query(prompt, json_mode=True)
-                
-                # LOG RAW RESPONSE
-                logger.info(f"   🤖 [DEBUG] AI Raw JSON Response:\n{llm_response}\n")
-                
-                # Parse Batch Result
-                json_str = llm_response
-                match = re.search(r"```json(.*?)```", llm_response, re.DOTALL)
-                if match: json_str = match.group(1).strip()
-                elif "{" in llm_response:
-                    s = llm_response.find("{")
-                    e = llm_response.rfind("}")
-                    json_str = llm_response[s:e+1]
-                
-                parsed = LLMOutput.model_validate_json(json_str)
-                batch_results = [c.model_dump() for c in parsed.candidates]
-                img_analysis.extend(batch_results) # Add to master list
-                logger.info(f"      ✅ Batch processed: {len(batch_results)} results received.")
+                except Exception as e:
+                    error_msg = str(e)
+                    if "429" in error_msg or "Rate limit" in error_msg:
+                        wait = 20 * (attempt + 1)
+                        logger.warning(f"   ⚠️ Rate Limit Hit (429). Retrying in {wait}s... (Attempt {attempt+1}/{max_retries})")
+                        time.sleep(wait)
+                    else:
+                        logger.error(f"AI Parse Error ({c['filename']}): {e}") 
+                        break # Don't retry on non-rate-limit errors
+            
+            if not success:
+               logger.warning(f"   ⚠️ Skipping AI analysis for {c['filename']} due to repeated errors. Using Base Score.")
 
-            except Exception as e:
-                logger.error(f"AI Parse Error (Batch {i}): {e}") 
-                import traceback
-                logger.error(traceback.format_exc())
-                # Don't break loop, continue to next batch
-                pass
+            # Rate Limit Prevention Check
+            time.sleep(1.0) # Sleep 1s between requests
 
         # 4b. Apply AI Results & Bonus
         if img_analysis:
@@ -399,37 +511,37 @@ async def _run_async_analysis(job_id: str, jd_text: str, source_dir: str, top_n:
                 
                 if target_cand:
                     # Update Fields
-                    target_cand["status"] = ai_res.get("status", "Review Required")
-                    target_cand["reasoning"] = ai_res.get("reasoning", "")
-                    target_cand["email"] = ai_res.get("email", "Not Found")
-                    target_cand["phone"] = ai_res.get("phone", "Not Found")
+                    target_cand['candidate_name'] = ai_res.get('candidate_name', target_cand.get('candidate_name'))
+                    target_cand['email'] = ai_res.get('email', target_cand.get('email'))
+                    target_cand['phone'] = ai_res.get('phone', target_cand.get('phone'))
+                    target_cand['extracted_skills'] = ai_res.get('extracted_skills', [])
+                    target_cand['status'] = ai_res.get('status', 'Review Required')
+                    target_cand['reasoning'] = ai_res.get('reasoning', '')
+                    target_cand['strengths'] = ai_res.get('strengths', [])
+                    target_cand['weaknesses'] = ai_res.get('weaknesses', [])
+                    target_cand['hobbies_and_achievements'] = ai_res.get('hobbies_and_achievements', [])
+
+                    # Apply Achievement Bonus from AI
+                    bonus = ai_res.get('achievement_bonus', 0)
+                    target_cand['achievement_bonus'] = bonus
                     
-                    # FIX: Update Score Data from AI Findings (Overwriting Regex zeroes)
+                    # Update Final Score
+                    current_total = target_cand['score']['total']
+                    new_total = min(100, current_total + bonus)
+                    target_cand['score']['total'] = round(new_total, 1)
+                    
+                    # Update score details for display
                     ai_exp = ai_res.get("years_of_experience", 0)
                     ai_skills = ai_res.get("extracted_skills", [])
                     
-                    # Update the internal score object so UI reflects it
                     target_cand["score"]["years"] = ai_exp
                     target_cand["score"]["matched_keywords"] = ai_skills
-                    # Recalculate experience score roughly (30 points max)
-                    # We assume 4 years is max for full points roughly in this context or use regex method
-                    # But simpler is better for display:
                     req_years = jd_data.get("required_years", 2)
                     new_exp_score = min(30, (ai_exp / req_years) * 30) if req_years else 0
                     target_cand["score"]["experience_score"] = round(new_exp_score, 1)
                     target_cand["score"]["keyword_score"] = len(ai_skills) # Just count for display
                     
-                    # Apply Bonus
-                    bonus = ai_res.get("achievement_bonus", 0)
-                    if bonus > 0:
-                        old_total = target_cand["score"]["total"]
-                        new_total = min(100, old_total + bonus)
-                        target_cand["score"]["total"] = new_total
-                        
-                        target_cand["score"]["ai_bonus"] = bonus
-                        target_cand["score"]["total_with_bonus"] = new_total
-                        
-                        logger.info(f"   🚀 {target_cand['filename']} Bonus: +{bonus} (New: {new_total})")
+                    logger.info(f"   🤖 Re-Ranked {target_cand['filename']}: {current_total} -> {new_total} (Bonus: +{bonus})")
         update_job_progress(job_id, 90, "Generating Final Reports...")
 
         # 5. GENERATE REPORTS
@@ -658,19 +770,48 @@ async def start_analysis(
                     shutil.copyfileobj(file.file, f) # Efficient stream copy
             files_found = True
         
-        # Source B: Gmail
+        # Source B: Gmail (OAuth)
         if start_date and end_date:
-            update_job_progress(job_id, 2, "Fetching Gmail Resumes...")
+            update_job_progress(job_id, 2, "Checking Gmail Connection...")
+            
+            # Check if Gmail is connected
+            if not gmail_fetch_service.is_connected():
+                logger.warning("Gmail not connected. Skipping Gmail fetch.")
+                raise HTTPException(
+                    status_code=400,
+                    detail="Gmail not connected. Please connect your Gmail account first by clicking 'Connect Gmail' button."
+                )
+            
             try:
-                gmail_resumes = gmail_service.gmail_service.fetch_resumes(start_date, end_date)
+                update_job_progress(job_id, 3, "Fetching Resumes from Gmail...")
+                gmail_resumes = gmail_fetch_service.fetch_resumes(start_date, end_date)
+                
                 if gmail_resumes:
+                    logger.info(f"✅ Fetched {len(gmail_resumes)} resumes from Gmail")
                     for item in gmail_resumes:
-                        fpath = os.path.join(temp_dir, f"[Email] {item['filename']}")
+                        # Save with [Gmail] prefix to distinguish source
+                        fpath = os.path.join(temp_dir, f"[Gmail] {item['filename']}")
                         with open(fpath, "wb") as f:
                             f.write(item["content"])
+                        
+                        # Store email metadata for role matching (done in pipeline)
+                        # We'll pass this through somehow - for now just log
+                        logger.info(f"  📧 From: '{item['email_subject']}'")
+                    
                     files_found = True
+                else:
+                    logger.info("No resumes found in Gmail for the specified date range")
+            
+            except ValueError as e:
+                # Gmail not connected error
+                logger.error(f"Gmail connection error: {e}")
+                raise HTTPException(status_code=400, detail=str(e))
             except Exception as e:
                 logger.error(f"Gmail Fetch Error: {e}")
+                raise HTTPException(
+                    status_code=500,
+                    detail=f"Failed to fetch emails from Gmail: {str(e)}"
+                )
         
         if not files_found:
              raise HTTPException(status_code=400, detail="No resumes provided. Please upload files or select a valid date range for Gmail.")

@@ -486,6 +486,49 @@ textarea::placeholder {
     outline: none;
 }
 
+/* Gmail OAuth Connection */
+.gmail-connection-status {
+    margin-top: 15px;
+    padding: 15px;
+    background: rgba(99, 102, 241, 0.05);
+    border-radius: var(--radius-sm);
+    border: 1px dashed rgba(99, 102, 241, 0.2);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    animation: slideDown 0.3s ease-out;
+}
+
+.gmail-connection-status .status-badge {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 16px;
+    background: white;
+    border-radius: 20px;
+    font-size: 0.85rem;
+    font-weight: 700;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+}
+
+.gmail-connection-status .status-badge.connected {
+    background: #dcfce7;
+    color: #15803d;
+}
+
+.gmail-connect-btn {
+    padding: 10px 24px;
+    font-size: 0.9rem;
+    font-weight: 700;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.gmail-connect-btn:hover {
+    background: var(--primary);
+    color: white;
+    border-color: var(--primary);
+}
+
 /* Action Footer */
 .action-footer {
     display: flex;

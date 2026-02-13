@@ -55,7 +55,8 @@ class AIService:
         7. Return ONLY the anonymized text. Do not add any preamble.
         
         Resume Text:
-        {text[:2500]}
+        Resume Text:
+        {text}
         """
         return self.query(prompt, temperature=0.1)
 

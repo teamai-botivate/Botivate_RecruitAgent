@@ -45,8 +45,199 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# 4. Mount Sub-Applications
-# Resume App (Main) -> / (Root)
+# 4. Gmail OAuth Endpoints
+from fastapi import HTTPException, Query
+from fastapi.responses import RedirectResponse, HTMLResponse
+from .services.gmail_oauth import gmail_oauth_service
+
+@app.get("/auth/gmail/start")
+async def start_gmail_oauth(company_id: str = Query(default="default_company")):
+    """
+    Start Gmail OAuth flow
+    
+    Args:
+        company_id: Unique identifier for the company (default: "default_company" for single-tenant)
+    
+    Returns:
+        Redirect to Google OAuth consent screen
+    """
+    try:
+        # Get the redirect URI (adjust for production)
+        redirect_uri = "http://localhost:8000/auth/gmail/callback"
+        
+        # Generate authorization URL
+        auth_url, state = gmail_oauth_service.get_authorization_url(company_id, redirect_uri)
+        
+        # Redirect user to Google
+        return RedirectResponse(url=auth_url)
+    
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to start OAuth: {str(e)}")
+
+
+@app.get("/auth/gmail/callback")
+async def gmail_oauth_callback(
+    code: str = Query(...),
+    state: str = Query(...),
+    company_id: str = Query(default="default_company")
+):
+    """
+    Handle OAuth callback from Google
+    
+    Args:
+        code: Authorization code from Google
+        state: State token for CSRF protection
+        company_id: Company identifier
+    
+    Returns:
+        Success page with connection status
+    """
+    try:
+        # Exchange code for tokens
+        result = gmail_oauth_service.handle_callback(company_id, code, state)
+        
+        # Return success page
+        html_content = f"""
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <title>Gmail Connected</title>
+            <style>
+                body {{
+                    font-family: Arial, sans-serif;
+                    display: flex;
+                    justify-content: center;
+                    align-items: center;
+                    height: 100vh;
+                    margin: 0;
+                    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                }}
+                .container {{
+                    background: white;
+                    padding: 40px;
+                    border-radius: 10px;
+                    box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+                    text-align: center;
+                    max-width: 400px;
+                }}
+                .success-icon {{
+                    font-size: 64px;
+                    color: #4CAF50;
+                }}
+                h1 {{
+                    color: #333;
+                    margin: 20px 0 10px;
+                }}
+                p {{
+                    color: #666;
+                    margin: 10px 0;
+                }}
+                .email {{
+                    background: #f5f5f5;
+                    padding: 10px;
+                    border-radius: 5px;
+                    margin: 20px 0;
+                    color: #333;
+                    font-weight: bold;
+                }}
+                .btn {{
+                    display: inline-block;
+                    margin-top: 20px;
+                    padding: 12px 30px;
+                    background: #667eea;
+                    color: white;
+                    text-decoration: none;
+                    border-radius: 5px;
+                    font-weight: bold;
+                }}
+                .btn:hover {{
+                    background: #5568d3;
+                }}
+            </style>
+        </head>
+        <body>
+            <div class="container">
+                <div class="success-icon">✅</div>
+                <h1>Gmail Connected!</h1>
+                <p>{result['message']}</p>
+                <div class="email">📧 {result['email']}</div>
+                <p>You can now close this window and return to RecruitAI.</p>
+                <a href="/" class="btn">Go to Dashboard</a>
+            </div>
+            <script>
+                // Auto-close after 3 seconds and notify parent window
+                setTimeout(() => {{
+                    if (window.opener) {{
+                        window.opener.postMessage({{
+                            type: 'gmail_connected',
+                            email: '{result['email']}'
+                        }}, '*');
+                        window.close();
+                    }}
+                }}, 2000);
+            </script>
+        </body>
+        </html>
+        """
+        
+        return HTMLResponse(content=html_content)
+    
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"OAuth callback failed: {str(e)}")
+
+
+@app.get("/auth/gmail/status")
+async def gmail_connection_status(company_id: str = Query(default="default_company")):
+    """
+    Check if Gmail is connected for a company
+    
+    Returns:
+        {"connected": bool, "email": str or null}
+    """
+    try:
+        is_connected = gmail_oauth_service.is_connected(company_id)
+        
+        email = None
+        if is_connected:
+            # Get user email
+            credentials = gmail_oauth_service.get_credentials(company_id)
+            from googleapiclient.discovery import build
+            service = build('gmail', 'v1', credentials=credentials)
+            profile = service.users().getProfile(userId='me').execute()
+            email = profile.get('emailAddress')
+        
+        return {
+            "connected": is_connected,
+            "email": email
+        }
+    
+    except Exception as e:
+        return {
+            "connected": False,
+            "email": None,
+            "error": str(e)
+        }
+
+
+@app.post("/auth/gmail/disconnect")
+async def disconnect_gmail(company_id: str = Query(default="default_company")):
+    """
+    Disconnect Gmail and revoke access
+    
+    Returns:
+        {"status": "success"}
+    """
+    try:
+        gmail_oauth_service.revoke_access(company_id)
+        return {"status": "success", "message": "Gmail disconnected successfully"}
+    
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to disconnect: {str(e)}")
+
+
+# 5. Mount Sub-Applications
 app.mount("/resume", resume_app) # Optional specific mount
 # But since resume_app handles /analyze at root, checking if we can merge routes or mount.
 # Best practice: Mount resume app at root for backward compatibility, 

@@ -85,19 +85,114 @@ document.getElementById('jd-text').addEventListener('input', (e) => {
     if (e.target.value.trim().length > 10) updateStepper(2);
 });
 
-// Gmail Toggle
+// Gmail OAuth Integration
 const gmailCheckbox = document.getElementById('gmail-checkbox');
 const gmailInputs = document.getElementById('gmail-inputs');
+const gmailConnection = document.getElementById('gmail-connection');
+const connectGmailBtn = document.getElementById('connect-gmail-btn');
+const gmailStatusBadge = document.getElementById('gmail-status-badge');
+const gmailStatusIcon = document.getElementById('gmail-status-icon');
+const gmailStatusText = document.getElementById('gmail-status-text');
 
+const API_BASE = 'http://localhost:8000';
+const COMPANY_ID = 'default_company';
+
+// Check Gmail connection on page load
+async function checkGmailConnection() {
+    try {
+        const response = await fetch(`${API_BASE}/auth/gmail/status?company_id=${COMPANY_ID}`);
+        const data = await response.json();
+
+        if (data.connected) {
+            // Gmail is connected
+            gmailStatusIcon.textContent = '✅';
+            gmailStatusText.textContent = data.email || 'Connected';
+            gmailStatusBadge.classList.add('connected');
+            connectGmailBtn.textContent = 'Disconnect';
+            connectGmailBtn.onclick = disconnectGmail;
+        } else {
+            // Not connected
+            gmailStatusIcon.textContent = '🔗';
+            gmailStatusText.textContent = 'Not Connected';
+            gmailStatusBadge.classList.remove('connected');
+            connectGmailBtn.textContent = 'Connect Gmail';
+            connectGmailBtn.onclick = connectGmail;
+        }
+    } catch (error) {
+        console.error('Error checking Gmail status:', error);
+    }
+}
+
+// Connect Gmail - Opens OAuth popup
+function connectGmail() {
+    const width = 600;
+    const height = 700;
+    const left = (screen.width - width) / 2;
+    const top = (screen.height - height) / 2;
+
+    const authUrl = `${API_BASE}/auth/gmail/start?company_id=${COMPANY_ID}`;
+
+    window.open(
+        authUrl,
+        'Gmail OAuth',
+        `width=${width},height=${height},left=${left},top=${top}`
+    );
+}
+
+// Disconnect Gmail
+async function disconnectGmail() {
+    if (!confirm('Are you sure you want to disconnect Gmail?')) {
+        return;
+    }
+
+    try {
+        connectGmailBtn.disabled = true;
+        connectGmailBtn.textContent = 'Disconnecting...';
+
+        const response = await fetch(`${API_BASE}/auth/gmail/disconnect?company_id=${COMPANY_ID}`, {
+            method: 'POST'
+        });
+
+        const data = await response.json();
+
+        if (data.status === 'success') {
+            showNotification('Gmail disconnected successfully', 'success');
+            await checkGmailConnection();
+        }
+    } catch (error) {
+        console.error('Error disconnecting Gmail:', error);
+        showNotification('Failed to disconnect Gmail', 'error');
+    } finally {
+        connectGmailBtn.disabled = false;
+    }
+}
+
+// Listen for OAuth popup success
+window.addEventListener('message', (event) => {
+    if (event.data.type === 'gmail_connected') {
+        console.log('Gmail connected:', event.data.email);
+        showNotification(`Gmail connected: ${event.data.email}`, 'success');
+        checkGmailConnection();
+    }
+});
+
+// Gmail toggle - show/hide connection and date picker
 if (gmailCheckbox) {
     gmailCheckbox.addEventListener('change', () => {
         if (gmailCheckbox.checked) {
+            gmailConnection.classList.remove('hidden');
             gmailInputs.classList.remove('hidden');
         } else {
+            gmailConnection.classList.add('hidden');
             gmailInputs.classList.add('hidden');
         }
     });
 }
+
+// Check Gmail connection on page load
+window.addEventListener('load', () => {
+    checkGmailConnection();
+});
 
 // --- Analysis Engine ---
 analyzeBtn.addEventListener('click', async () => {

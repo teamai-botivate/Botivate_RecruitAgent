@@ -36,7 +36,7 @@ class JDExtractor:
         
         TASK:
         Return a Strict JSON object with the following fields:
-        1. "job_title": The role title.
+        1. "job_title": The exact role title. Look for patterns like "Hiring for:", "Position:", "Role:", "Title:", or the header.
         2. "technical_skills": A clean list of HARD skills only (e.g., "Python", "React", "AWS", "SQL"). DO NOT include generic words like "proficiency" or "strong".
         3. "soft_skills": A list of soft skills (e.g., "Communication", "Leadership").
         4. "required_years_experience": An integer representing the MINIMUM years required. If not mentioned, return 0. (e.g., "3+ years" -> 3).
