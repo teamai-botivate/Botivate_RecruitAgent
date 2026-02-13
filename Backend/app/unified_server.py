@@ -63,6 +63,16 @@ if os.path.exists(jd_frontend_path):
 else:
     print(f"⚠️ Warning: JD Frontend path not found: {jd_frontend_path}")
 
+# Explicitly Mount Reports Directory (Fix for PDF Links)
+reports_dir = os.path.join(current_dir, "Reports") # Backend/app/../Reports -> Backend/Reports actually?
+# wait, current_dir is Backend/app. We want Backend/Reports usually?
+# Let's check main.py line 47: os.makedirs("Reports"). This creates ./Reports relative to CWD.
+# If running form Backend root, it is Backend/Reports.
+reports_path = os.path.abspath("Reports") 
+if not os.path.exists(reports_path): os.makedirs(reports_path)
+app.mount("/reports", StaticFiles(directory=reports_path), name="reports")
+print(f"✅ Reports mounted at /reports (Path: {reports_path})")
+
 # Mount Resume App Routes specifically or Just Include Router?
 app.mount("/", resume_app)
 

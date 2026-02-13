@@ -147,12 +147,19 @@ async def _run_async_analysis(job_id: str, jd_text: str, source_dir: str, top_n:
                     logger.info(f"      ✅ Found: {', '.join(score_data.get('matched_keywords', []))}")
                     logger.info(f"      ❌ Missing: {', '.join(score_data.get('missing_keywords', []))}")
                     
+                    # Pre-populate fields so UI is never empty even if AI fails later
                     processed_candidates.append({
                         "filename": fname,
                          "name": utils.extract_name(clean_text, fname),
                          "score": score_data,
                          "text": clean_text,
-                         "status": "Pending"
+                         "status": "Pending",
+                         # CRITICAL FIX: Ensure these fields exist from Step 1
+                         "extracted_skills": score_data.get('matched_keywords', []),
+                         # If calculate_score extracts years, use it; otherwise 0.
+                         # Assuming calculate_score might return 'experience_years' or we rely on utils separately.
+                         # For now, simplistic approach:
+                         "years_of_experience": 0.0 
                     })
 
             except Exception as e:
@@ -271,19 +278,39 @@ async def _run_async_analysis(job_id: str, jd_text: str, source_dir: str, top_n:
         update_job_progress(job_id, 75, f"Identified Top {len(top_candidates)} Candidates. Running AI Analysis...")
 
         # 4. AI ANALYSIS (Pass 3 - The Deep Dive)
-        # Only analyze the Top N (Max 20 to save tokens/time)
-        ai_target = top_candidates[:20] 
-        logger.info(f"   🎯 Pass 3: Selecting Top {len(ai_target)} for AI Analysis (Requested Top {top_n}).")
-        
-        candidates_text = ""
-        for c in ai_target:
-             anon_text = ai_service.ai_service.anonymize(c['text'])
-             candidates_text += f"\n--- Candidate ---\nFilename: {c['filename']}\nScore: {c['score']['total']}\nContent:\n{anon_text[:2500]}\n"
+        # Smart Selection: Analyze Top N * 2 candidates (Capped at 25)
+        # This gives borderline candidates (e.g. Rank #6) a chance to jump into Top 5 if AI likes them.
+        analysis_limit = min(25, top_n * 2)
+        if len(valid_candidates) < analysis_limit:
+            ai_target = valid_candidates
+        else:
+            ai_target = valid_candidates[:analysis_limit]
 
+        logger.info(f"   🎯 Pass 3: Selecting Top {len(ai_target)} for AI Analysis (Buffer: {analysis_limit} vs Request: {top_n}).")
+        
         img_analysis = []
-        if candidates_text:
+        
+        # BATCH PROCESSING (Avoid Token Limits / Truncation)
+        BATCH_SIZE = 5
+        
+        for i in range(0, len(ai_target), BATCH_SIZE):
+            batch = ai_target[i : i+BATCH_SIZE]
+            logger.info(f"   🤖 Processing AI Batch {i//BATCH_SIZE + 1} ({len(batch)} candidates)...")
+            
+            # Construct Batch Prompt
+            candidates_text = ""
+            for c in batch:
+                 anon_text = ai_service.ai_service.anonymize(c['text'])
+                 # LOG EXTRACTED TEXT PREVIEW (With Exp Info)
+                 raw_exp = c['score'].get('years_of_experience', 0)
+                 logger.info(f"   📄 [DEBUG] {c['filename']} | Base Exp: {raw_exp}y | Text Preview:\n{anon_text[:500]}...\n")
+                 
+                 candidates_text += f"\n--- Candidate ---\nFilename: {c['filename']}\nScore: {c['score']['total']}\nContent:\n{anon_text[:2500]}\n"
+
+            if not candidates_text: continue
+
             prompt = f"""
-            You are a Senior Technical Recruiter. Analyze these candidates for the Job Description below.
+            You are a Senior Technical Recruiter. Analyze these {len(batch)} candidates for the Job Description below.
             
             JD Summary: {jd_clean[:1500]}
             
@@ -293,7 +320,10 @@ async def _run_async_analysis(job_id: str, jd_text: str, source_dir: str, top_n:
             INSTRUCTIONS:
             1. Evaluate relevance to the JD (Skills, Experience, Role Fit).
             2. EXTRACT DETAILS (CRITICAL):
-               - "years_of_experience": Calculate from work history dates. (e.g. "2021-Present" ~ 3 years). Do NOT return 0 if work history exists.
+               - "years_of_experience": Calculate ONLY from professional work history dates.
+                 * DO NOT count University/College duration (e.g. 2021-2025) as work experience.
+                 * Count Internships if labeled clearly.
+                 * Example: A 2025 graduate has ~0-1 years exp, NOT 4 years.
                - "extracted_skills": List of technical skills actually found.
                - "email" and "phone": Extract EXACT text found. Do NOT redact. Do NOT use placeholders like "[EMAIL]". If not found, return "Not Found".
             3. LOOK FOR HIDDEN GEMS: Check for Hackathons, Open Source (GitHub), Awards, Publications, or Complex Side Projects.
@@ -302,6 +332,8 @@ async def _run_async_analysis(job_id: str, jd_text: str, source_dir: str, top_n:
                - 5-10: Good projects/certs
                - 15-20: Hackathon winner, major open source contribution.
             5. Classify status as "High Potential" or "Review Required".
+            6. YOU MUST RETURN A JSON OBJECT FOR ALL {len(batch)} CANDIDATES provided. Do not skip any.
+            7. For "hobbies_and_achievements", list SPECIFIC project names (e.g. "MyNovelList Backend") or stats (e.g. "500+ LeetCode"). Do not be generic.
 
             OUTPUT FORMAT (Strict JSON):
             {{
@@ -318,17 +350,26 @@ async def _run_async_analysis(job_id: str, jd_text: str, source_dir: str, top_n:
                   "reasoning": "...",
                   "strengths": ["..."],
                   "weaknesses": ["..."],
-                  "hobbies_and_achievements": ["Hackathon Winner 2024", "..."]
+                  "hobbies_and_achievements": ["Project X: ...", "Hackathon Winner"]
                 }}
               ]
             }}
             Ensure the JSON is valid.
             """
+            
+            # SAVE PROMPT TO FILE FOR DEBUGGING
+            with open("debug_last_prompt.txt", "w", encoding="utf-8") as f:
+                f.write(prompt)
+            logger.info("   💾 [DEBUG] Saved last prompt to 'debug_last_prompt.txt'")
+
             try:
+                # Call LLM per batch
                 llm_response = ai_service.ai_service.query(prompt, json_mode=True)
-                logger.info(f"   🤖 AI Raw Output (Truncated):\n{llm_response[:500]}...")
                 
-                # Quick Parse Logic
+                # LOG RAW RESPONSE
+                logger.info(f"   🤖 [DEBUG] AI Raw JSON Response:\n{llm_response}\n")
+                
+                # Parse Batch Result
                 json_str = llm_response
                 match = re.search(r"```json(.*?)```", llm_response, re.DOTALL)
                 if match: json_str = match.group(1).strip()
@@ -338,11 +379,16 @@ async def _run_async_analysis(job_id: str, jd_text: str, source_dir: str, top_n:
                     json_str = llm_response[s:e+1]
                 
                 parsed = LLMOutput.model_validate_json(json_str)
-                img_analysis = [c.model_dump() for c in parsed.candidates]
+                batch_results = [c.model_dump() for c in parsed.candidates]
+                img_analysis.extend(batch_results) # Add to master list
+                logger.info(f"      ✅ Batch processed: {len(batch_results)} results received.")
+
             except Exception as e:
-                logger.error(f"AI Parse Error: {e}") 
+                logger.error(f"AI Parse Error (Batch {i}): {e}") 
                 import traceback
                 logger.error(traceback.format_exc())
+                # Don't break loop, continue to next batch
+                pass
 
         # 4b. Apply AI Results & Bonus
         if img_analysis:
@@ -412,19 +458,12 @@ async def _run_async_analysis(job_id: str, jd_text: str, source_dir: str, top_n:
                 shutil.copy2(os.path.join(source_dir, c['filename']), f"{report_dir}/Not_Selected_Resumes/{c['filename']}")
              except: pass
 
-        # Rejected (Hard)
-        if rejected_candidates:
-             os.makedirs(f"{report_dir}/Rejected_Resumes", exist_ok=True)
-             for c in rejected_candidates:
-                 try:
-                    shutil.copy2(os.path.join(source_dir, c['filename']), f"{report_dir}/Rejected_Resumes/{c['filename']}")
-                 except: pass
+
 
         # Prepare Final Result Payload
         # We need to merge AI analysis back into the top candidates AND Re-Rank based on AI opinion!
         
-        # Robust Logic: File names might differ slightly (e.g. "[Email]" prefix)
-        # Create a map that handles both raw and clean filenames
+        # Robust Logic: Handle [Email] prefixes and other noise
         ai_map = {}
         # Ensure img_analysis exists
         if 'img_analysis' not in locals(): img_analysis = []
@@ -432,17 +471,27 @@ async def _run_async_analysis(job_id: str, jd_text: str, source_dir: str, top_n:
         for item in img_analysis:
             raw_name = item.get('filename', '')
             if raw_name:
-                clean_name = raw_name.replace('[Email] ', '').strip()
+                # Store multiple keys for robust lookup
                 ai_map[raw_name] = item
-                ai_map[clean_name] = item 
-        
+                
+                # key 2: Clean name (Remove ANY brackets like [Email] or [Extracted])
+                clean_name = re.sub(r'\[.*?\]', '', raw_name).strip()
+                ai_map[clean_name] = item
+                
+                # key 3: Just Os.path.basename
+                base_name = os.path.basename(raw_name)
+                ai_map[base_name] = item
+
         updated_top_candidates = []
         for c in top_candidates:
             # Try to match filename
             fname = c['filename']
-            fname_clean = fname.replace('[Email] ', '').strip()
+            # Remove ANY brackets
+            fname_clean = re.sub(r'\[.*?\]', '', fname).strip()
+            fname_base = os.path.basename(fname)
             
-            ai_data = ai_map.get(fname) or ai_map.get(fname_clean)
+            # Waterfall lookup
+            ai_data = ai_map.get(fname) or ai_map.get(fname_clean) or ai_map.get(fname_base)
             
             if ai_data: # If AI analyzed this candidate
                 status = ai_data.get('status', 'Review Required')

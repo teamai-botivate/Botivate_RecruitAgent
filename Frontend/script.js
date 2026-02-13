@@ -207,6 +207,7 @@ async function pollJob(jobId) {
 }
 
 // --- Tab Switching & Filtering ---
+// --- Tab Switching ---
 window.switchTab = function (tabName) {
     document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
     document.querySelectorAll('.tab-pane').forEach(content => content.classList.remove('active'));
@@ -217,20 +218,14 @@ window.switchTab = function (tabName) {
     document.getElementById(`${tabName}-view`).classList.add('active');
 }
 
-window.switchAnalysisFilter = function (filter) {
-    document.querySelectorAll('.filter-pill').forEach(btn => btn.classList.remove('active'));
-    document.getElementById(`filter-${filter}`).classList.add('active');
-    renderAnalysisContent(filter);
-}
-
 // --- Rendering Logic ---
 function renderResults(data) {
     lastAnalysisData = data;
     currentReportPath = data.report_path;
     document.getElementById('results-area').classList.remove('hidden');
 
-    // Default filter
-    switchAnalysisFilter('shortlist');
+    // Render Analysis Cards directly (No more filters)
+    renderAnalysisContent();
     lucide.createIcons();
 
     // Render Leaderboard
@@ -284,48 +279,20 @@ function renderResults(data) {
     });
 }
 
+
+// Simplified: Show All Analyzed Candidates (Sorted by Score)
 function renderAnalysisContent(filter) {
     const container = document.getElementById('analysis-dynamic-content');
     container.innerHTML = '';
-    const analysis = lastAnalysisData.ai_analysis;
-    const rejectedList = lastAnalysisData.rejected_candidates || [];
-    const rejectedFiles = new Set(rejectedList.map(r => r.filename));
 
-    if (filter === 'shortlist') {
-        const shortlisted = Array.isArray(analysis) ? analysis.filter(item => {
-            const s = (item.status || "").toLowerCase();
-            return !rejectedFiles.has(item.filename) && !s.includes('reject');
-        }) : [];
+    // Use MAIN candidates list (Already Sorted by Final Score!)
+    // Filter only those that have AI reasoning
+    const analysis = lastAnalysisData.candidates.filter(c => c.reasoning);
 
-        shortlisted.forEach((item, idx) => {
-            renderCandidateCard(item, container, idx);
-        });
-    } else {
-        const rejected = Array.isArray(analysis) ? analysis.filter(item => {
-            const s = (item.status || "").toLowerCase();
-            return rejectedFiles.has(item.filename) || s.includes('reject');
-        }) : [];
-
-        rejected.forEach((item, idx) => {
-            renderCandidateCard(item, container, idx, true);
-        });
-
-        // Add Rule rejections
-        const ruleRejections = rejectedList.filter(r => !analysis.some(a => a.filename === r.filename));
-        if (ruleRejections.length > 0) {
-            const ruleHeader = document.createElement('h3');
-            ruleHeader.textContent = "Logic Level Rejections";
-            ruleHeader.style.margin = "40px 0 20px 0";
-            container.appendChild(ruleHeader);
-
-            ruleRejections.forEach(r => {
-                const card = document.createElement('div');
-                card.className = 'candidate-card status-rejected';
-                card.innerHTML = `<h4>${r.name || r.filename}</h4><p>${r.reason}</p>`;
-                container.appendChild(card);
-            });
-        }
-    }
+    analysis.forEach((item, idx) => {
+        // Render all cards. If status is "Rejected", it will show red badge.
+        renderCandidateCard(item, container, idx, (item.status || "").toLowerCase().includes("reject"));
+    });
 }
 
 function renderCandidateCard(item, container, index, isRejected = false) {
@@ -334,25 +301,62 @@ function renderCandidateCard(item, container, index, isRejected = false) {
     card.style.animationDelay = `${index * 0.1}s`;
 
     let statusClass = "status-recommended";
-    if (isRejected) statusClass = "status-rejected";
-    else if (item.status === 'Potential') statusClass = "status-potential";
+    // Smart Status determination
+    const s = (item.status || "").toLowerCase();
+    if (isRejected || s.includes("reject") || s.includes("review")) statusClass = "status-rejected";
+    else if (s.includes("potential")) statusClass = "status-potential";
+
+    // Smart Name Fallback
+    let displayName = item.candidate_name;
+    if (!displayName || displayName === "Not Found" || displayName === "Unknown") {
+        // Fallback to clean filename
+        displayName = item.filename.replace(/\.pdf$/i, '').replace(/_/g, ' ');
+    }
+
+    // PDF Link
+    const pdfLink = `http://localhost:8000/reports/${lastAnalysisData.campaign_folder}/All_Resumes/${item.filename}`;
+
+    // Achievements HTML
+    let achievementsHtml = '';
+    if (item.hobbies_and_achievements && item.hobbies_and_achievements.length > 0) {
+        achievementsHtml = `
+        <div class="achievements-section" style="margin-top: 15px; border-top: 1px solid #eee; padding-top: 10px;">
+            <h5 style="color: #6366f1; font-size: 0.9em; margin-bottom: 5px;">🏆 Achievements & Hobbies</h5>
+            <ul class="achievement-list" style="padding-left: 20px; font-size: 0.9em; color: #555;">
+                ${item.hobbies_and_achievements.map(a => `<li>${a}</li>`).join('')}
+            </ul>
+        </div>`;
+    }
 
     card.innerHTML = `
-        <div class="card-header">
-            <h4>${item.candidate_name || "Anonymous"} <span>${item.filename}</span></h4>
-            <span class="status-badge ${statusClass}">${item.status || 'Verified'}</span>
+        <div class="card-header" style="justify-content: space-between; align-items: start;">
+            <div>
+                <h4 style="margin: 0;">${displayName}</h4>
+                <a href="${pdfLink}" target="_blank" style="font-size: 0.8em; color: #6366f1; text-decoration: none; display: flex; align-items: center; gap: 4px; margin-top: 4px;">
+                    📄 View Resume <span style="font-size: 10px;">↗</span>
+                </a>
+            </div>
+            <span class="status-badge ${statusClass}">${item.status || 'Analyzed'}</span>
         </div>
-        <p class="analysis-text">${item.reasoning}</p>
-        <div class="pros-cons">
+        
+        <p class="analysis-text" style="margin: 12px 0;">${item.reasoning || "Reasoning not available."}</p>
+        
+        <div class="pros-cons" style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
             <div class="pros">
-                <h5>Key Advantages</h5>
-                <ul>${(item.strengths || []).slice(0, 3).map(s => `<li>${s}</li>`).join('')}</ul>
+                <h5 style="color: #10b981; font-size: 0.9em; margin-bottom: 5px;">✅ Key Advantages</h5>
+                <ul style="padding-left: 20px; font-size: 0.9em; margin: 0;">
+                    ${(item.strengths || []).slice(0, 3).map(s => `<li>${s}</li>`).join('')}
+                </ul>
             </div>
             <div class="cons">
-                <h5>${isRejected ? 'Critical Gaps' : 'Observation'}</h5>
-                <ul>${(item.weaknesses || []).slice(0, 3).map(w => `<li>${w}</li>`).join('')}</ul>
+                <h5 style="color: #ef4444; font-size: 0.9em; margin-bottom: 5px;">⚠️ Observation</h5>
+                <ul style="padding-left: 20px; font-size: 0.9em; margin: 0;">
+                    ${(item.weaknesses || []).slice(0, 3).map(w => `<li>${w}</li>`).join('')}
+                </ul>
             </div>
         </div>
+        
+        ${achievementsHtml}
     `;
     container.appendChild(card);
 }
