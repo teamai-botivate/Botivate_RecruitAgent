@@ -1,12 +1,9 @@
 import os
 from groq import Groq
 from dotenv import load_dotenv
-
 # Load environment variables
-# Load environment variables
-current_dir = os.path.dirname(os.path.abspath(__file__))
-project_root = os.path.dirname(os.path.dirname(current_dir))
-load_dotenv(dotenv_path=os.path.join(project_root, ".env"))
+basedir = os.path.abspath(os.path.dirname(__file__))
+load_dotenv(os.path.join(basedir, "../../.env"))
 
 client = Groq(api_key=os.getenv("GROQ_API_KEY"))
 
@@ -34,6 +31,7 @@ async def generate_jd_ai(data: dict):
     Experience Level: {data['experience']}
     Employment Type: {data['employmentType']}
     Work Mode: {data['workMode']}
+    Offered Salary: {data['salary']} Lakhs per Annum (LPA)
 
     ----------------------------
     INTELLIGENT ANALYSIS REQUIREMENTS
@@ -42,6 +40,7 @@ async def generate_jd_ai(data: dict):
     - Automatically determine required Key Skills and modern Tech Stack based on market standards.
     - Do NOT rely on pre-provided skills (infer them from the role title and industry).
     - Adjust responsibilities and tools based on experience level ({data['experience']}).
+    - Mention the salary of {data['salary']} LPA clearly as the first point in the compensation section.
     - Ensure the JD is ATS-friendly.
 
     ----------------------------
@@ -54,10 +53,11 @@ async def generate_jd_ai(data: dict):
     5. REQUIRED SKILLS: (Bulleted list)
     6. TECH STACK: (Separately mentioned list)
     7. PREFERRED SKILLS: (Bulleted list)
-    8. BENEFITS: (Bulleted list)
+    8. COMPENSATION & BENEFITS (MANDATORY: Include "{data['salary']} LPA"): (Include Salary and other perks)
     9. CLOSING LINE: (Professional call to action)
 
     CONSTRAINTS:
+    - YOU MUST INCLUDE THE SALARY OF {data['salary']} LPA IN SECTION 8.
     - Keep it concise (under 250 words total).
     - Use professional, punchy language.
     - Maintain the numbered structure (1-9).

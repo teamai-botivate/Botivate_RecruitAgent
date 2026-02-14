@@ -1,0 +1,357 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RecruitAI | Aptitude Generator</title>
+    <link rel="stylesheet" href="styles.css">
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&display=swap"
+        rel="stylesheet">
+    <script src="https://unpkg.com/lucide@latest"></script>
+</head>
+
+<body class="light-theme">
+    <!-- Decorative background elements -->
+    <div class="bg-blur blur-1"></div>
+    <div class="bg-blur blur-2"></div>
+    <div class="bg-blur blur-3"></div>
+
+    <nav class="navbar glass">
+        <div class="nav-container">
+            <div class="logo">
+                <span class="logo-icon"><i data-lucide="dna"></i></span>
+                <span class="logo-text">RecruitAI</span>
+            </div>
+            <div class="nav-links">
+                <div class="workflow-stepper">
+                    <a href="/resume/index.html" class="step" data-step="1">Resume Screening</a>
+                    <a href="/jd-tools/index.html" class="step" data-step="2">JD Generator</a>
+                    <div class="step active" data-step="3">Aptitude generator</div>
+                </div>
+            </div>
+            <div class="nav-actions">
+                <button id="view-analysis-btn" class="glass-btn sm">
+                    <i data-lucide="bar-chart-3"></i> Analyse Aptitude
+                </button>
+            </div>
+        </div>
+    </nav>
+
+    <main class="content-wrapper">
+        <header class="hero-section">
+            <h1 class="animate-text">Strategic <span class="gradient-text">Aptitude Builder</span></h1>
+            <p class="subtitle animate-fade-in">Generate role-specific evaluation questions based on Job Descriptions.
+            </p>
+        </header>
+
+        <div class="generator-layout">
+            <!-- Input Section -->
+            <section class="main-card glass animate-slide-up">
+                <h3 class="section-title">Job Description Source</h3>
+
+                <div class="input-container">
+                    <label class="field-label">Paste Job Description</label>
+                    <textarea id="jd-input"
+                        placeholder="Paste the Job Description here to generate targeted questions..."
+                        rows="8"></textarea>
+                </div>
+
+                <div class="divider"><span>OR</span></div>
+
+                <div class="file-upload-container">
+                    <label for="file-upload" class="file-label glass">
+                        <i data-lucide="upload-cloud"></i>
+                        <span>Upload JD (.txt)</span>
+                        <input type="file" id="file-upload" accept=".txt">
+                    </label>
+                    <div id="file-name" class="file-name-display">No file chosen</div>
+                </div>
+
+                <div class="action-footer">
+                    <button id="generate-aptitude-btn" class="primary-btn pulse-on-hover">
+                        <span>Generate Aptitude Questions</span>
+                        <span class="btn-icon"><i data-lucide="brain-circuit"></i></span>
+                    </button>
+                </div>
+            </section>
+
+            <!-- Selection Section (Hidden by default) -->
+            <section id="selection-section" class="main-card glass hidden animate-slide-up">
+                <div class="section-header">
+                    <div>
+                        <h3 class="section-title">Select Questions to Include</h3>
+                    </div>
+                    <div class="selection-controls">
+                        <div class="select-all-container">
+                            <label class="neon-checkbox">
+                                <input type="checkbox" id="select-all-checkbox">
+                                <div class="neon-checkbox__frame">
+                                    <div class="neon-checkbox__box">
+                                        <div class="neon-checkbox__check-container">
+                                            <svg viewBox="0 0 24 24" class="neon-checkbox__check">
+                                                <path d="M3,12.5l7,7L21,5"></path>
+                                            </svg>
+                                        </div>
+                                        <div class="neon-checkbox__glow"></div>
+                                        <div class="neon-checkbox__borders">
+                                            <span></span><span></span><span></span><span></span>
+                                        </div>
+                                    </div>
+                                    <div class="neon-checkbox__effects">
+                                        <div class="neon-checkbox__particles">
+                                            <span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span>
+                                        </div>
+                                        <div class="neon-checkbox__rings">
+                                            <div class="ring"></div>
+                                            <div class="ring"></div>
+                                            <div class="ring"></div>
+                                        </div>
+                                        <div class="neon-checkbox__sparks">
+                                            <span></span><span></span><span></span><span></span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </label>
+                            <span class="select-all-text"
+                                onclick="document.getElementById('select-all-checkbox').click()">Select All</span>
+                        </div>
+                        <div class="selection-stats">
+                            <span id="selected-count">0</span> Questions Selected
+                        </div>
+                    </div>
+                </div>
+
+                <div class="selection-tabs">
+                    <button class="tab-btn active" data-tab="mcqs">MCQs (25)</button>
+                    <button class="tab-btn" data-tab="coding">Coding Questions (4)</button>
+                </div>
+
+                <div id="mcq-selection-view" class="tab-content">
+                    <div id="questions-list" class="questions-container">
+                        <!-- MCQs injected here -->
+                    </div>
+                </div>
+
+                <div id="coding-selection-view" class="tab-content hidden">
+                    <div class="section-header" style="margin-top: 10px; border-bottom: none;">
+                        <div class="select-all-container">
+                            <label class="neon-checkbox">
+                                <input type="checkbox" id="select-all-coding">
+                                <div class="neon-checkbox__frame">
+                                    <div class="neon-checkbox__box">
+                                        <div class="neon-checkbox__check-container">
+                                            <svg viewBox="0 0 24 24" class="neon-checkbox__check">
+                                                <path d="M3,12.5l7,7L21,5"></path>
+                                            </svg>
+                                        </div>
+                                        <div class="neon-checkbox__glow"></div>
+                                        <div class="neon-checkbox__borders">
+                                            <span></span><span></span><span></span><span></span>
+                                        </div>
+                                    </div>
+                                    <div class="neon-checkbox__effects">
+                                        <div class="neon-checkbox__particles">
+                                            <span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span>
+                                        </div>
+                                        <div class="neon-checkbox__rings">
+                                            <div class="ring"></div>
+                                            <div class="ring"></div>
+                                            <div class="ring"></div>
+                                        </div>
+                                        <div class="neon-checkbox__sparks">
+                                            <span></span><span></span><span></span><span></span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </label>
+                            <span class="select-all-text"
+                                onclick="document.getElementById('select-all-coding').click()">Select All Coding</span>
+                        </div>
+                    </div>
+                    <div id="coding-questions-list" class="questions-container">
+                        <!-- Coding questions injected here -->
+                    </div>
+                </div>
+
+                <div class="action-footer">
+                    <button id="done-btn" class="secondary-btn-large">
+                        <span>Confirm Assessment Set</span>
+                        <i data-lucide="check-circle"></i>
+                    </button>
+                </div>
+            </section>
+
+            <!-- Final Result Section (Hidden by default) -->
+            <section id="final-result-section" class="main-card glass hidden animate-slide-up">
+                <div class="result-header">
+                    <h3 class="section-title">Final Assessment Pack</h3>
+                    <div class="result-actions">
+                        <button id="copy-btn" class="glass-btn action-item">
+                            <i data-lucide="copy"></i> Copy
+                        </button>
+                        <button id="download-pdf-btn" class="glass-btn action-item">
+                            <i data-lucide="file-text"></i> Download PDF
+                        </button>
+                        <button id="email-btn" class="glass-btn action-item primary-glass-btn">
+                            <i data-lucide="mail"></i> Send to Candidates
+                        </button>
+                    </div>
+                </div>
+                <div class="output-tabs">
+                    <button class="out-tab-btn active" data-out-tab="mcq-out">MCQs</button>
+                    <button class="out-tab-btn" data-out-tab="coding-out">Coding</button>
+                </div>
+                <div id="mcq-out" class="out-tab-content">
+                    <div id="final-aptitude-list" class="aptitude-content"></div>
+                </div>
+                <div id="coding-out" class="out-tab-content hidden">
+                    <div id="final-coding-list" class="aptitude-content"></div>
+                </div>
+            </section>
+
+            <!-- Analysis Dashboard Section (Hidden by default) -->
+            <section id="analysis-dashboard-section" class="main-card glass hidden animate-slide-up">
+                <div class="section-header">
+                    <h3 class="section-title">Assessment Analytics</h3>
+                    <button class="glass-btn" onclick="hideAnalysis()"><i data-lucide="arrow-left"></i> Back</button>
+                </div>
+
+                <!-- Job Roles View -->
+                <div id="job-roles-view">
+                    <div class="stats-overview">
+                        <div class="stat-item glass">
+                            <span class="stat-label">Total Tests Sent</span>
+                            <span id="total-tests-stat" class="stat-value">0</span>
+                        </div>
+                        <div class="stat-item glass">
+                            <span class="stat-label">Completion Rate</span>
+                            <span id="completion-rate-stat" class="stat-value">0%</span>
+                        </div>
+                    </div>
+                    <div class="analysis-table-container">
+                        <table class="modern-table">
+                            <thead>
+                                <tr id="roles-table-header">
+                                    <th>Job Title</th>
+                                    <th>Tests Sent</th>
+                                    <th>Attempted</th>
+                                    <th>Pending</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="job-roles-tbody">
+                                <!-- Data will be injected here -->
+                            </tbody>
+                        </table>
+                        <div id="empty-state" class="empty-state hidden">
+                            <i data-lucide="database-zap"></i>
+                            <p>No assessment data found. Start by generating and sending an assessment.</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Candidate Details View (Inside Analysis) -->
+                <div id="candidate-details-view" class="hidden">
+                    <div class="detail-header">
+                        <h4 id="detail-job-title">AI Agent Developer</h4>
+                        <button class="text-link" onclick="backToRoles()"><i data-lucide="chevron-left"></i> All
+                            Roles</button>
+                    </div>
+                    <div class="analysis-table-container">
+                        <table class="modern-table">
+                            <thead>
+                                <tr>
+                                    <th>Email</th>
+                                    <th>MCQ Score</th>
+                                    <th>Coding Score</th>
+                                    <th>Status</th>
+                                    <th>Date</th>
+                                </tr>
+                            </thead>
+                            <tbody id="candidate-submissions-list">
+                                <!-- Candidate data will be injected here -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </section>
+        </div>
+
+        <!-- Email Modal -->
+        <div id="email-modal" class="modal-overlay hidden">
+            <div class="modal-content glass animate-slide-up">
+                <div class="modal-header">
+                    <h3>Send Assessment</h3>
+                    <button class="close-modal" id="close-email-modal"><i data-lucide="x"></i></button>
+                </div>
+                <div class="modal-body">
+                    <div class="input-group">
+                        <label>Candidate Emails (comma separated)</label>
+                        <textarea id="receiver-emails" placeholder="candidate1@gmail.com, candidate2@gmail.com"
+                            rows="2"></textarea>
+                    </div>
+                    <div class="email-preview glass-inset">
+                        <div class="preview-tag">Email Preview</div>
+                        <div class="preview-content">
+                            <p><strong>Subject:</strong> Career Opportunity | [Job Title] Aptitude Assessment</p>
+                            <br>
+                            <p>Dear Candidate,</p>
+                            <p>Congratulations! Your profile has been shortlisted for the <strong>[Job Title]</strong>
+                                role at our organization.</p>
+                            <p>To move forward, please complete the following technical assessment. It consists of 25
+                                MCQs designed to evaluate your domain expertise.</p>
+                            <div class="assessment-link-box">
+                                <span class="link-label">Your Unique Assessment Link:</span>
+                                <span class="mock-link">recruitai.com/test/assessment_id_XYZ123</span>
+                            </div>
+                            <p>Please complete this within 48 hours.</p>
+                            <p>Best regards,<br>Botivate Recruitment Team</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button class="glass-btn" id="cancel-email">Cancel</button>
+                    <button class="primary-btn" id="confirm-send-email">
+                        <span>Send Assessment</span>
+                        <i data-lucide="send"></i>
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Loading State -->
+        <div id="loader" class="loader-overlay hidden">
+            <div class="loader-content glass">
+                <div class="ai-spinner">
+                    <div class="orb"></div>
+                    <div class="orb"></div>
+                    <div class="orb"></div>
+                </div>
+                <h3>AI Agent is Thinking...</h3>
+                <p>Generating technical and analytical questions from JD.</p>
+            </div>
+        </div>
+
+        <!-- Custom Confirmation Modal -->
+        <div id="confirm-modal" class="modal-overlay hidden">
+            <div class="modal-content glass animate-slide-up mini-modal">
+                <div class="modal-header">
+                    <h3 id="confirm-title">Confirmation</h3>
+                    <button class="close-modal" id="close-confirm"><i data-lucide="x"></i></button>
+                </div>
+                <div class="modal-body">
+                    <p id="confirm-message">Are you sure?</p>
+                </div>
+                <div class="modal-footer">
+                    <button class="glass-btn" id="confirm-cancel-btn">Cancel</button>
+                    <button class="primary-btn" id="confirm-ok-btn">OK</button>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <script src="script.js"></script>
+</body>
+
+</html>

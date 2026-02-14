@@ -78,8 +78,10 @@ def extract_keywords(text: str) -> Set[str]:
     return keywords
 
 def extract_years_of_experience(text: str) -> float:
-    """Extract experience using robust regex patterns."""
-    # Look for "X years", "X.Y years", "X+ yrs", "X exp"
+    """Extract experience using robust regex patterns + date range calculation."""
+    from datetime import datetime
+    
+    # Method 1: Look for explicit "X years", "X.Y years", "X+ yrs", "X exp"
     patterns = [
         r'(\d+(?:\.\d+)?)\+?\s*(?:years?|yrs?)',
         r'experience\s*:\s*(\d+(?:\.\d+)?)',
@@ -98,7 +100,48 @@ def extract_years_of_experience(text: str) -> float:
                     found_years.append(val)
             except:
                 pass
-                
+    
+    # Method 2: Parse date ranges (e.g., "2020-2024", "Jan 2021 - Present")
+    # Common formats: YYYY-YYYY, Month YYYY - Month YYYY, YYYY - Present
+    date_patterns = [
+        r'(\d{4})\s*[-–—]\s*(\d{4})',  # 2020-2024
+        r'(\d{4})\s*[-–—]\s*(?:present|current|now)',  # 2020-Present
+        r'(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\s*(\d{4})\s*[-–—]\s*(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\s*(\d{4})',  # Jan 2020 - Dec 2023
+        r'(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\s*(\d{4})\s*[-–—]\s*(?:present|current|now)'  # Jan 2020 - Present
+    ]
+    
+    current_year = datetime.now().year
+    date_ranges = []
+    
+    for pattern in date_patterns:
+        matches = re.findall(pattern, text, re.IGNORECASE)
+        for match in matches:
+            try:
+                if len(match) == 2 and match[1].isdigit():
+                    # Format: YYYY-YYYY or Month YYYY - Month YYYY
+                    start_year = int(match[0])
+                    end_year = int(match[1])
+                    if 1980 <= start_year <= current_year and start_year <= end_year <= current_year:
+                        duration = end_year - start_year
+                        if duration > 0:
+                            date_ranges.append(duration)
+                elif len(match) == 1:
+                    # Format: YYYY-Present
+                    start_year = int(match[0])
+                    if 1980 <= start_year <= current_year:
+                        duration = current_year - start_year
+                        if duration > 0:
+                            date_ranges.append(duration)
+            except:
+                pass
+    
+    # Calculate total experience from date ranges (sum all job durations)
+    if date_ranges:
+        total_exp = sum(date_ranges)
+        # Cap at 40 years to avoid unrealistic totals
+        if total_exp > 0 and total_exp <= 40:
+            found_years.append(total_exp)
+    
     if found_years:
         # Return the maximum year mentioned (assumes "Total Experience: 5" > "Job: 2")
         return max(found_years)

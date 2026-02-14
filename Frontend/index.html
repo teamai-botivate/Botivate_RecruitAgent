@@ -26,9 +26,8 @@
             <div class="nav-links">
                 <div class="workflow-stepper">
                     <div class="step active" data-step="1">Resume Screening</div>
-                    <a href="http://localhost:8000/jd-tools/" class="step" data-step="2">JD Generator</a>
-                    <a href="../Aptitude_Generator/frontend/index.html" class="step" data-step="3">Aptitude
-                        generator</a>
+                    <a href="/jd-tools/index.html" class="step" data-step="2">JD Generator</a>
+                    <a href="/aptitude/index.html" class="step" data-step="3">Aptitude generator</a>
                 </div>
             </div>
             <div class="nav-actions">
@@ -150,9 +149,19 @@
                     <button class="tab-btn" onclick="switchTab('table')">
                         <span class="icon"><i data-lucide="trending-up"></i></span> Leaderboard
                     </button>
+                    <button class="tab-btn" onclick="switchTab('notselected')">
+                        <span class="icon"><i data-lucide="x-circle"></i></span> Not Selected
+                    </button>
                 </div>
                 <button id="open-report-btn" class="glass-btn secondary-btn">
                     <span class="icon"><i data-lucide="folder-open"></i></span> Open Campaign Folder
+                </button>
+                <button id="view-all-candidates-btn" class="glass-btn secondary-btn" style="margin-left: 10px;">
+                    <span class="icon"><i data-lucide="list"></i></span> View All Candidates
+                </button>
+                <button id="reject-proceed-btn" class="glass-btn primary-btn"
+                    style="margin-left: 10px; background: rgba(220, 38, 38, 0.2); border-color: rgba(220, 38, 38, 0.4);">
+                    <span class="icon"><i data-lucide="mail-warning"></i></span> Reject & Create Test
                 </button>
             </div>
 
@@ -188,10 +197,78 @@
                     </table>
                 </div>
             </div>
+
+            <div id="notselected-view" class="tab-pane animate-fade-in">
+                <div class="ai-report-wrapper">
+                    <header class="report-header">
+                        <h2>Not Selected Candidates</h2>
+                        <p style="opacity: 0.7; font-size: 14px;">Valid applicants who didn't make the final cut</p>
+                    </header>
+                    <div id="notselected-content" class="candidate-grid">
+                        <!-- Cards injected here -->
+                    </div>
+                </div>
+            </div>
         </section>
     </main>
 
-    <script src="script.js"></script>
+    <!-- All Candidates Modal -->
+    <div id="candidates-modal" class="modal-overlay hidden">
+        <div class="modal-content glass" style="max-width: 900px; max-height: 80vh; overflow-y: auto;">
+            <div class="modal-header">
+                <h2>All Candidates Overview</h2>
+                <button class="modal-close" onclick="closeCandidatesModal()">
+                    <i data-lucide="x"></i>
+                </button>
+            </div>
+
+            <div class="modal-body">
+                <!-- Selected Candidates Section -->
+                <div class="candidates-section">
+                    <h3 style="color: #10b981; margin-bottom: 16px;">
+                        <i data-lucide="check-circle" style="width: 20px; height: 20px;"></i>
+                        Selected Candidates
+                    </h3>
+                    <table class="modern-table" style="margin-bottom: 32px;">
+                        <thead>
+                            <tr>
+                                <th>Name</th>
+                                <th>Email</th>
+                                <th>Score</th>
+                                <th>Resume</th>
+                            </tr>
+                        </thead>
+                        <tbody id="selected-candidates-tbody">
+                            <!-- Injected via JS -->
+                        </tbody>
+                    </table>
+                </div>
+
+                <!-- Not Selected Candidates Section -->
+                <div class="candidates-section">
+                    <h3 style="color: #ef4444; margin-bottom: 16px;">
+                        <i data-lucide="x-circle" style="width: 20px; height: 20px;"></i>
+                        Not Selected Candidates
+                    </h3>
+                    <table class="modern-table">
+                        <thead>
+                            <tr>
+                                <th>Name</th>
+                                <th>Email</th>
+                                <th>Score</th>
+                                <th>Resume</th>
+                            </tr>
+                        </thead>
+                        <tbody id="notselected-candidates-tbody">
+                            <!-- Injected via JS -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="script.js?v=7"></script>
 </body>
 
 </html>

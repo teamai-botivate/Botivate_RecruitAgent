@@ -88,6 +88,7 @@ class GmailFetchService:
                 return []
             
             resumes = []
+            seen_filenames = set()  # Track used filenames to prevent duplicates
             
             # Process each message
             for msg_info in messages:
@@ -145,6 +146,17 @@ class GmailFetchService:
                                     
                                     data = attachment['data']
                                     file_data = base64.urlsafe_b64decode(data)
+                                    
+                                    # DEDUPLICATE FILENAME
+                                    original_filename = filename
+                                    counter = 1
+                                    while filename in seen_filenames:
+                                        # Split name and extension
+                                        name, ext = original_filename.rsplit('.', 1) if '.' in original_filename else (original_filename, '')
+                                        filename = f"{name}_{counter}.{ext}" if ext else f"{name}_{counter}"
+                                        counter += 1
+                                    
+                                    seen_filenames.add(filename)
                                     
                                     resumes.append({
                                         'filename': filename,

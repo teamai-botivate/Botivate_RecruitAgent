@@ -135,6 +135,10 @@ async def _run_async_analysis(job_id: str, jd_text: str, source_dir: str, top_n:
                 # Calculate Hash
                 file_hash = hashlib.md5(file_bytes).hexdigest()
                 
+                # Extract Email (Regex Fallback)
+                email_match = re.search(r'[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}', text)
+                extracted_email = email_match.group(0) if email_match else ""
+                
                 clean_text = utils.clean_text(text)
                 
                 # IMMEDIATE SCORING (Pass 1 - The Fast Scan)
@@ -146,7 +150,8 @@ async def _run_async_analysis(job_id: str, jd_text: str, source_dir: str, top_n:
                     "text": clean_text,
                     "pages": pages,
                     "hash": file_hash,
-                    "score_data": score_data
+                    "score_data": score_data,
+                    "email": extracted_email
                 }
             except Exception as e:
                 return {"status": "error", "fname": fname, "error": str(e)}
@@ -182,7 +187,8 @@ async def _run_async_analysis(job_id: str, jd_text: str, source_dir: str, top_n:
                          "name": utils.extract_name(text, fname),
                          "score": score_data, 
                          "status": "Rejected",
-                         "file_hash": result['hash']
+                         "file_hash": result['hash'],
+                         "email": result['email']
                      })
                 else:
                     processed_candidates.append({
@@ -195,7 +201,8 @@ async def _run_async_analysis(job_id: str, jd_text: str, source_dir: str, top_n:
                          "years_of_experience": 0.0,
                         "file_hash": result['hash'],
                          "email_subject": gmail_metadata.get(fname, {}).get("email_subject", ""),
-                         "email_body": gmail_metadata.get(fname, {}).get("email_body", "")
+                         "email_body": gmail_metadata.get(fname, {}).get("email_body", ""),
+                         "email": result['email']
                     })
                 
                 # Progress Update
@@ -237,7 +244,7 @@ async def _run_async_analysis(job_id: str, jd_text: str, source_dir: str, top_n:
                     email_subject=candidate.get('email_subject', ''),
                     email_body=candidate.get('email_body', ''),
                     resume_text=candidate['text'],
-                    threshold=0.45,  # Semantic similarity threshold (0.45 captures 'MIS' ~ 'Data Analyst')
+                    threshold=0.6,  # Zero-shot classification threshold (higher = stricter)
                     jd_title_embedding=jd_title_vector # PASS PRE-COMPUTED VECTOR
                 )
             except Exception as e:
@@ -400,14 +407,29 @@ async def _run_async_analysis(job_id: str, jd_text: str, source_dir: str, top_n:
 
         # 4. AI ANALYSIS (Pass 3 - The Deep Dive)
         # Smart Selection: Analyze Top N + 2 candidates (Conservative to avoid Rate Limits)
-        # Smart Selection: Analyze Top N + 2 candidates (Conservative to avoid Rate Limits)
         analysis_limit = min(15, top_n + 5) 
         if len(vector_candidates) < analysis_limit:
             ai_target = vector_candidates
+            not_analyzed = []
         else:
             ai_target = vector_candidates[:analysis_limit]
+            not_analyzed = vector_candidates[analysis_limit:]
+        
+        # Mark candidates with analysis flags
+        for candidate in ai_target:
+            candidate['ai_analyzed'] = True
+            candidate['analysis_method'] = 'full_ai'
+        
+        for candidate in not_analyzed:
+            candidate['ai_analyzed'] = False
+            candidate['analysis_method'] = 'similarity_only'
+            # Keep basic data but no AI reasoning
+            if 'reasoning' not in candidate:
+                candidate['reasoning'] = None
 
         logger.info(f"   🎯 Pass 3: Selecting Top {len(ai_target)} for AI Analysis (Buffer: {analysis_limit} vs Request: {top_n}).")
+        if not_analyzed:
+            logger.info(f"   📊 Skipping AI for {len(not_analyzed)} candidates (ranked by similarity only)")
         
         img_analysis = []
         
@@ -696,11 +718,64 @@ async def _run_async_analysis(job_id: str, jd_text: str, source_dir: str, top_n:
                  r['score']['breakdown'] = { "Base Score": r['score']['total'], "AI Bonus": 0, "Final": r['score']['total'] }
                  r['score']['breakdown_text'] = f"Base: {r['score']['total']} (No AI Analysis)"
                 
-        # Merge lists (Top Rated First + Others)
+        # Merge lists: AI-analyzed + Not-analyzed-but-valid
+        # Add not-analyzed candidates to remaining
+        for na_candidate in not_analyzed:
+            # Ensure they have basic score structure
+            if 'breakdown' not in na_candidate['score']:
+                na_candidate['score']['breakdown'] = {
+                    "Base Score": na_candidate['score']['total'],
+                    "AI Bonus": 0,
+                    "Final": na_candidate['score']['total']
+                }
+                na_candidate['score']['breakdown_text'] = f"Similarity: {na_candidate.get('vector_score', 0):.2f} (Not AI analyzed)"
+            remaining.append(na_candidate)
+        
+        # Merge lists (AI-analyzed candidates + Remaining including not-analyzed)
         final_list = updated_top_candidates + remaining
         
-        # FINAL GLOBAL SORT: Ensure strict descending order regardless of bonus/no-bonus groups
-        final_list.sort(key=lambda x: x['score']['total'], reverse=True)
+        # FINAL GLOBAL SORT: AI-analyzed first (by score), then not-analyzed (by vector_score)
+        final_list.sort(
+            key=lambda x: (
+                x.get('ai_analyzed', False),  # True before False
+                x['score']['total'],  # AI score
+                x.get('vector_score', 0)  # Vector score as tiebreaker
+            ),
+            reverse=True
+        )
+        
+        # --- EXPORT DATA FOR APTITUDE SYSTEM ---
+        selected_export = []
+        for c in updated_top_candidates:
+             selected_export.append({
+                 "name": c.get("candidate_name", c["name"]),
+                 "email": c.get("email", ""), 
+                 "role": jd_data['title'],
+                 "resume": os.path.abspath(f"{report_dir}/Shortlisted_Resumes/{c['filename']}")
+             })
+        
+        rejected_export = []
+        
+        # ONLY include candidates who were valid for the role but had low scores
+        # We do NOT send rejection emails to:
+        # - Hard-rule rejections (page count violations, etc.)
+        # - Role filter rejections (applied for wrong position)
+        for c in remaining:
+             rejected_export.append({
+                 "name": c.get("candidate_name", c["name"]),
+                 "email": c.get("email", ""),
+                 "role": jd_data['title'],
+                 "reason": "Not Selected (Low Score)"
+             })
+             
+        # Save JSONs
+        with open(f"{report_dir}/selected_candidates.json", "w") as f:
+            json.dump(selected_export, f, indent=4)
+        
+        with open(f"{report_dir}/not_selected_candidates.json", "w") as f:
+            json.dump(rejected_export, f, indent=4)
+            
+        logger.info(f"✅ Generated Handoff Files: selected_candidates.json ({len(selected_export)}) & not_selected_candidates.json ({len(rejected_export)})")
         
         # Rejections
         final_rejected = []

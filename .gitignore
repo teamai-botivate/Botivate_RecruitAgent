@@ -52,3 +52,6 @@ tokens/
 Backend/tokens/
 debug_last_prompt.txt
 Backend/debug_last_prompt.txt
+
+MANUAL_UPDATE.txt
+assessments_db.json

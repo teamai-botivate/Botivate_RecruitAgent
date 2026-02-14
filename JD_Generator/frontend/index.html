@@ -1,13 +1,16 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>RecruitAI | AI JD Generator</title>
     <link rel="stylesheet" href="styles.css">
-    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&display=swap"
+        rel="stylesheet">
     <script src="https://unpkg.com/lucide@latest"></script>
 </head>
+
 <body class="light-theme">
     <!-- Decorative background elements -->
     <div class="bg-blur blur-1"></div>
@@ -22,9 +25,9 @@
             </div>
             <div class="nav-links">
                 <div class="workflow-stepper">
-                    <a href="../../Frontend/index.html" class="step" data-step="1">Resume Screening</a>
+                    <a href="/resume/index.html" class="step" data-step="1">Resume Screening</a>
                     <div class="step active" data-step="2">JD Generator</div>
-                    <a href="../../Aptitude_Generator/frontend/index.html" class="step" data-step="3">Aptitude generator</a>
+                    <a href="/aptitude/index.html" class="step" data-step="3">Aptitude generator</a>
                 </div>
             </div>
             <div class="nav-actions">
@@ -51,7 +54,8 @@
                             <div class="input-grid">
                                 <div class="input-field">
                                     <label>Company Name</label>
-                                    <input type="text" id="company-name" placeholder="e.g., TechNova Solutions" required>
+                                    <input type="text" id="company-name" placeholder="e.g., TechNova Solutions"
+                                        required>
                                 </div>
                                 <div class="input-field">
                                     <label>Company Type</label>
@@ -103,6 +107,10 @@
                                         <option value="Hybrid">Hybrid</option>
                                     </select>
                                 </div>
+                                <div class="input-field">
+                                    <label>Salary (Lakhs per Annum)</label>
+                                    <input type="number" id="salary" placeholder="e.g., 12" min="0" step="0.1" required>
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -126,6 +134,10 @@
                         </button>
                         <button id="download-btn" class="glass-btn secondary-btn" title="Download as .txt">
                             <i data-lucide="download"></i> Download TXT
+                        </button>
+                        <button id="proceed-btn" class="glass-btn primary-btn" title="Use JD for Screening"
+                            style="background: rgba(99, 102, 241, 0.2); border: 1px solid rgba(99, 102, 241, 0.4); color: #fff;">
+                            <i data-lucide="arrow-right-circle"></i> Proceed to Screening
                         </button>
                     </div>
                 </div>
@@ -151,4 +163,5 @@
 
     <script src="script.js"></script>
 </body>
+
 </html>

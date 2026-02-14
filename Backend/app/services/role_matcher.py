@@ -1,90 +1,50 @@
 """
-Role Matching Service - Semantic Similarity (Local Embeddings)
-Matches resumes to job descriptions by role meaning using Sentence Transformers.
-Zero API Cost. High Accuracy.
+Role Matching Service - Zero-Shot Classification
+Matches resumes to job descriptions using facebook/bart-large-mnli
+More accurate than semantic similarity for role detection.
 """
 
 import re
 from typing import Optional, Dict
-from langchain_huggingface import HuggingFaceEmbeddings
-from sentence_transformers import CrossEncoder
-from sklearn.metrics.pairwise import cosine_similarity
 import numpy as np
 import logging
 
 logger = logging.getLogger(__name__)
 
-# Initialize Local Embedding Models (Singletons)
+# Initialize Zero-Shot Classification Pipeline (Singleton)
+_zero_shot_classifier = None
 
-# 1. Bi-Encoder (Vectors) - For fast retrieval / caching
-_embedding_model = None
-
-# 2. Cross-Encoder (Re-Ranking) - For accurate Role Matching
-# This is much smarter than vectors for "Is X relevant to Y?"
-_cross_encoder_model = None
-
-def get_embedding_model():
-    global _embedding_model
-    if _embedding_model is None:
-        logger.info("⏳ Loading Bi-Encoder Embedding Model (all-mpnet-base-v2)...")
-        _embedding_model = HuggingFaceEmbeddings(model_name="all-mpnet-base-v2")
-        logger.info("✅ Bi-Encoder Model Loaded.")
-    return _embedding_model
-
-def get_cross_encoder_model():
-    global _cross_encoder_model
-    if _cross_encoder_model is None:
-        logger.info("⏳ Loading Cross-Encoder Model (ms-marco-MiniLM-L-6-v2)...")
-        _cross_encoder_model = CrossEncoder('cross-encoder/ms-marco-MiniLM-L-6-v2')
-        logger.info("✅ Cross-Encoder Model Loaded.")
-    return _cross_encoder_model
-
-def sigmoid(x):
-    return 1 / (1 + np.exp(-x))
+def get_zero_shot_classifier():
+    """Load Zero-Shot Classification model (BART-large-MNLI)"""
+    global _zero_shot_classifier
+    if _zero_shot_classifier is None:
+        try:
+            from transformers import pipeline
+            import torch
+            
+            logger.info("⏳ Loading Zero-Shot Classifier (facebook/bart-large-mnli)...")
+            
+            # Use GPU if available
+            device = 0 if torch.cuda.is_available() else -1
+            
+            _zero_shot_classifier = pipeline(
+                "zero-shot-classification",
+                model="facebook/bart-large-mnli",
+                device=device
+            )
+            
+            logger.info("✅ Zero-Shot Classifier Loaded Successfully.")
+        except Exception as e:
+            logger.error(f"Failed to load Zero-Shot Classifier: {e}")
+            raise
+    
+    return _zero_shot_classifier
 
 
 def extract_text_segment(text: str, max_chars: int = 1000) -> str:
     """Helper to safely get start of text"""
     if not text: return ""
     return text[:max_chars].replace('\n', ' ').strip()
-
-
-def get_text_embedding(text: str) -> Optional[np.ndarray]:
-    """
-    Get embedding vector for a single string. (Bi-Encoder)
-    Returns numpy array or None.
-    """
-    if not text: return None
-    try:
-        model = get_embedding_model()
-        clean_text = text.lower().strip()
-        embedding = model.embed_documents([clean_text])[0]
-        return np.array([embedding])
-    except Exception as e:
-        logger.error(f"Embedding Error: {e}")
-        return None
-
-
-def calculate_semantic_similarity(
-    role1_text: str = None, 
-    role2_text: str = None,
-    role1_embedding: np.ndarray = None,
-    role2_embedding: np.ndarray = None
-) -> float:
-    """Legacy Bi-Encoder Similarity (Kept for compatibility if needed elsewhere)"""
-    try:
-        vec1 = role1_embedding
-        if vec1 is None and role1_text:
-            vec1 = get_text_embedding(role1_text)
-        vec2 = role2_embedding
-        if vec2 is None and role2_text:
-            vec2 = get_text_embedding(role2_text)   
-        if vec1 is None or vec2 is None:
-            return 0.0
-        score = cosine_similarity(vec1, vec2)[0][0]
-        return float(score)
-    except:
-        return 0.0
 
 
 def extract_potential_role(text: str) -> Optional[str]:
@@ -100,78 +60,121 @@ def detect_and_match_role(
     email_subject: str,
     email_body: str,
     resume_text: str,
-    threshold: float = 0.45,
-    jd_title_embedding: np.ndarray = None # Ignored in Cross-Encoder mode, kept for signature comp
+    threshold: float = 0.6,  # Zero-shot typically needs higher threshold (0.6-0.7)
+    jd_title_embedding: np.ndarray = None  # Kept for backward compatibility
 ) -> Dict[str, any]:
     """
-    Role detection using CROSS-ENCODER (High Accuracy).
-    Matches JD Title vs Email Subject & Top 15 Resume Lines.
+    Role detection using Zero-Shot Classification (High Accuracy).
+    
+    Args:
+        jd_title: Target role from job description (e.g., "Backend Developer")
+        email_subject: Subject line of application email
+        email_body: Body of application email
+        resume_text: Full resume text
+        threshold: Minimum confidence score (0.0-1.0, default 0.6)
+    
+    Returns:
+        Dict with detected_role, is_match, similarity score, etc.
     """
-    # 1. Gather Candidates
-    role_candidates = []
+    
+    # Construct combined text from email + resume header
+    combined_text_parts = []
     
     # Priority 1: Email Subject (Cleaned)
     if email_subject:
-        clean_subj = re.sub(r'(?i)(application|applying|resume|for|regarding|re:|ref:)', '', email_subject).strip()
+        clean_subj = re.sub(
+            r'(?i)(application|applying|resume|for|regarding|re:|ref:)', 
+            '', 
+            email_subject
+        ).strip()
         if clean_subj:
-            role_candidates.append(("email_subject", clean_subj))
-            
-    # Priority 2: Resume Header Lines (Top 15)
+            combined_text_parts.append(clean_subj)
+    
+    # Priority 2: Email Body Preview
+    if email_body:
+        body_preview = extract_text_segment(email_body, max_chars=300)
+        if body_preview:
+            combined_text_parts.append(body_preview)
+    
+    # Priority 3: Resume Header (Top 500 chars - contains role, skills, summary)
     if resume_text:
-        lines = [line.strip() for line in resume_text.split('\n') if len(line.strip()) > 3]
-        for i, line in enumerate(lines[:15]):
-            role_candidates.append((f"resume_line_{i+1}", line[:120])) # Slightly longer context for CrossEncoder
-
-    logger.info(f"DEBUG: Candidates for '{jd_title}': {[c[1] for c in role_candidates]}")
-
-    if not role_candidates:
-         return {
+        resume_header = extract_text_segment(resume_text, max_chars=500)
+        if resume_header:
+            combined_text_parts.append(resume_header)
+    
+    # Combine all parts
+    combined_text = ". ".join(combined_text_parts)
+    
+    if not combined_text:
+        logger.warning(f"No text available for role matching")
+        return {
             "detected_role": "Unknown",
             "source": None,
-            "is_match": True, 
+            "is_match": True,  # Give benefit of doubt
             "similarity": 0.0,
             "jd_title": jd_title
         }
-
-    # 2. Batch Predict with Cross Encoder
+    
+    logger.info(f"DEBUG: Candidates for '{jd_title}': ['{combined_text[:100]}...']")
+    
+    # Run Zero-Shot Classification
     try:
-        model = get_cross_encoder_model()
+        classifier = get_zero_shot_classifier()
         
-        # Prepare pairs: [[JD, Candidate1], [JD, Candidate2]...]
-        pairs = [[jd_title, text] for _, text in role_candidates]
+        # Classify: Does this text match the target role?
+        result = classifier(
+            combined_text,
+            candidate_labels=[jd_title],
+            multi_label=True
+        )
         
-        # Predict (Returns Logits)
-        logits = model.predict(pairs)
+        # Extract score
+        relevance_score = result["scores"][0] if result["scores"] else 0.0
         
-        # Apply Sigmoid -> Probability
-        # If logits is a single float (1 pair), convert to list
-        if isinstance(logits, float):
-            logits = [logits]
-            
-        probs = [sigmoid(l) for l in logits]
+        logger.info(f"DEBUG: Scores for '{jd_title}': [{relevance_score:.4f}]")
         
-        logger.info(f"DEBUG: Scores for '{jd_title}': {probs}")
+        # Determine if it's a match
+        is_match = relevance_score >= threshold
         
-        # Find Best
-        best_idx = np.argmax(probs)
-        best_score = float(probs[best_idx])
-        best_source = role_candidates[best_idx][0]
-        best_role_text = role_candidates[best_idx][1]
-        
-        # Logger debug
-        # logger.info(f"   🔎 Best Match: '{best_role_text}' (Score: {best_score:.3f})")
-
-        is_match = best_score >= threshold
+        # Extract detected role (use email subject as best guess if available)
+        detected_role_text = clean_subj if email_subject else extract_potential_role(resume_text)
+        if not detected_role_text:
+            detected_role_text = jd_title  # Fallback to JD title
         
         return {
-            "detected_role": best_role_text,
-            "source": best_source,
+            "detected_role": detected_role_text,
+            "source": "zero_shot_classification",
             "is_match": is_match,
-            "similarity": round(best_score, 2),
+            "similarity": round(relevance_score, 2),
             "jd_title": jd_title
         }
         
     except Exception as e:
-        logger.error(f"Cross Encoder Error: {e}")
-        # Fallback to permissive
-        return {"detected_role": "Error", "source": "error", "is_match": True, "similarity": 0.0, "jd_title": jd_title}
+        logger.error(f"Zero-Shot Classification Error: {e}")
+        import traceback
+        traceback.print_exc()
+        
+        # Fallback: Give benefit of doubt
+        return {
+            "detected_role": "Error", 
+            "source": "error", 
+            "is_match": True, 
+            "similarity": 0.0, 
+            "jd_title": jd_title
+        }
+
+
+# Legacy function kept for backward compatibility (not used anymore)
+def get_text_embedding(text: str) -> Optional[np.ndarray]:
+    """Deprecated: Kept for backward compatibility"""
+    return None
+
+
+def calculate_semantic_similarity(
+    role1_text: str = None, 
+    role2_text: str = None,
+    role1_embedding: np.ndarray = None,
+    role2_embedding: np.ndarray = None
+) -> float:
+    """Deprecated: Kept for backward compatibility"""
+    return 0.0

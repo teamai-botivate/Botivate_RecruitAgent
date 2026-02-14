@@ -12,6 +12,13 @@ let currentReportPath = "";
 // --- Initialization & Stepper Logic ---
 document.addEventListener('DOMContentLoaded', () => {
     lucide.createIcons();
+    // Load JD from Generator if present
+    const savedJD = localStorage.getItem('recruiter_generated_jd');
+    if (savedJD) {
+        document.getElementById('jd-text').value = savedJD;
+        // Trigger update stepper
+        updateStepper(2);
+    }
 });
 
 function updateStepper(stepNumber) {
@@ -239,7 +246,7 @@ analyzeBtn.addEventListener('click', async () => {
 
     try {
         // 1. Initiate Job
-        const response = await fetch('http://localhost:8000/analyze', {
+        const response = await fetch('/api/analyze', {
             method: 'POST',
             body: formData
         });
@@ -268,7 +275,7 @@ async function pollJob(jobId) {
 
     const pollInterval = setInterval(async () => {
         try {
-            const res = await fetch(`http://localhost:8000/status/${jobId}`);
+            const res = await fetch(`/api/status/${jobId}`);
             if (!res.ok) throw new Error("Status check failed");
 
             const statusData = await res.json();
@@ -321,6 +328,7 @@ function renderResults(data) {
 
     // Render Analysis Cards directly (No more filters)
     renderAnalysisContent();
+    renderNotSelectedContent();  // Render not-selected candidates tab
     lucide.createIcons();
 
     // Render Leaderboard
@@ -388,6 +396,84 @@ function renderAnalysisContent(filter) {
         // Render all cards. If status is "Rejected", it will show red badge.
         renderCandidateCard(item, container, idx, (item.status || "").toLowerCase().includes("reject"));
     });
+}
+
+
+// Render Not Selected Candidates - HYBRID APPROACH
+function renderNotSelectedContent() {
+    const container = document.getElementById('notselected-content');
+    container.innerHTML = '';
+
+    const topN = parseInt(topNInput.value) || 5;
+
+    // Get all candidates
+    const allCandidates = lastAnalysisData.candidates || [];
+
+    // Separate into categories
+    const remaining = allCandidates.slice(topN);
+
+    // Further split remaining into analyzed vs not-analyzed  
+    const notSelected_analyzed = remaining.filter(c => c.ai_analyzed === true || c.reasoning);
+    const notSelected_similarity = remaining.filter(c => c.ai_analyzed === false && !c.reasoning);
+
+    // Section 1: Analyzed but not selected
+    if (notSelected_analyzed.length > 0) {
+        const section1 = document.createElement('div');
+        section1.className = 'not-selected-section';
+        section1.innerHTML = `
+            <h3 style="color: #f59e0b; margin-bottom: 16px; display: flex; align-items: center; gap: 8px;">
+                <i data-lucide="alert-circle" style="width: 20px; height: 20px;"></i>
+                Not Selected - AI Analyzed (${notSelected_analyzed.length})
+            </h3>
+            <p style="opacity: 0.7; font-size: 14px; margin-bottom: 16px;">
+                These candidates were analyzed by AI but didn't make the top ${topN} cut
+            </p>
+        `;
+
+        const grid1 = document.createElement('div');
+        grid1.className = 'candidate-grid';
+        notSelected_analyzed.forEach((item, idx) => {
+            renderCandidateCard(item, grid1, idx, true);
+        });
+        section1.appendChild(grid1);
+        container.appendChild(section1);
+    }
+
+    // Section 2: Not analyzed (by similarity only)
+    if (notSelected_similarity.length > 0) {
+        const section2 = document.createElement('div');
+        section2.className = 'not-selected-section';
+        section2.style.marginTop = '48px';
+        section2.innerHTML = `
+            <h3 style="color: #6b7280; margin-bottom: 16px; display: flex; align-items: center; gap: 8px;">
+                <i data-lucide="bar-chart-2" style="width: 20px; height: 20px;"></i>
+                Not Selected - By Similarity Score (${notSelected_similarity.length})
+            </h3>
+            <p style="opacity: 0.7; font-size: 14px; margin-bottom: 16px;">
+                Ranked by semantic similarity to JD but not selected for detailed AI analysis
+            </p>
+        `;
+
+        const grid2 = document.createElement('div');
+        grid2.className = 'candidate-grid';
+        notSelected_similarity.forEach((item, idx) => {
+            renderSimilarityCard(item, grid2, idx);
+        });
+        section2.appendChild(grid2);
+        container.appendChild(section2);
+    }
+
+    // If both empty
+    if (notSelected_analyzed.length === 0 && notSelected_similarity.length === 0) {
+        container.innerHTML = `
+            <div style="text-align: center; padding: 60px 20px; color: rgba(255,255,255,0.6);">
+                <i data-lucide="check-circle" style="width: 48px; height: 48px; margin-bottom: 16px;"></i>
+                <p>All valid candidates were selected!</p>
+            </div>
+        `;
+    }
+
+    lucide.createIcons();
 }
 
 function renderCandidateCard(item, container, index, isRejected = false) {
@@ -467,7 +553,7 @@ document.getElementById('open-report-btn').addEventListener('click', async () =>
     if (!currentReportPath) return;
     const formData = new FormData();
     formData.append('path', currentReportPath);
-    fetch('http://localhost:8000/open_report', { method: 'POST', body: formData });
+    fetch('/api/open_report', { method: 'POST', body: formData });
 });
 
 // Modal Logic placeholder
@@ -500,3 +586,186 @@ window.showScoreDetail = function (idx) {
     alert(details);
 };
 
+// --- Handover Logic ---
+const rejectProceedBtn = document.getElementById('reject-proceed-btn');
+if (rejectProceedBtn) {
+    rejectProceedBtn.addEventListener('click', async () => {
+        if (!lastAnalysisData || !lastAnalysisData.campaign_folder) {
+            alert("Analysis data not found. Please run screening first.");
+            return;
+        }
+
+        if (!confirm("This will send rejection emails to all 'Not Selected' candidates and proceed to Test Formation. Continue?")) return;
+
+        const reportFolder = lastAnalysisData.campaign_folder;
+
+        // 1. Fetch Not Selected List
+        try {
+            const resp = await fetch(`http://localhost:8000/reports/${reportFolder}/not_selected_candidates.json`);
+            if (!resp.ok) throw new Error("Could not find rejection list.");
+            const rejectedList = await resp.json();
+
+            // 2. Extract Emails
+            const emails = rejectedList.map(c => c.email).filter(e => e);
+
+            if (emails.length > 0) {
+                // 3. Send Rejection
+                const sendResp = await fetch('http://localhost:8000/aptitude-api/send-rejection', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        emails: emails,
+                        job_title: "Applicant" // Could extract from JD
+                    })
+                });
+                if (!sendResp.ok) alert("Warning: Failed to send some rejection emails.");
+                else alert(`Rejection emails sent to ${emails.length} candidates.`);
+            } else {
+                alert("No candidates to reject (or no emails found). Proceeding.");
+            }
+
+            // 4. Save Selected List URL for Aptitude App
+            localStorage.setItem('aptitude_candidates_url', `http://localhost:8000/reports/${reportFolder}/selected_candidates.json`);
+
+            // 5. Navigate
+            window.location.href = '/aptitude/index.html';
+
+        } catch (e) {
+            alert("Error during handover: " + e.message);
+        }
+    });
+}
+
+// --- All Candidates Modal ---
+const viewAllCandidatesBtn = document.getElementById('view-all-candidates-btn');
+if (viewAllCandidatesBtn) {
+    viewAllCandidatesBtn.addEventListener('click', () => {
+        if (!lastAnalysisData) {
+            alert("No analysis data available. Please run screening first.");
+            return;
+        }
+        showCandidatesModal();
+    });
+}
+
+function showCandidatesModal() {
+    const modal = document.getElementById('candidates-modal');
+    const topN = parseInt(topNInput.value) || 5;
+
+    // Get all analyzed candidates
+    const allAnalyzed = lastAnalysisData.candidates.filter(c => c.reasoning);
+    const selected = allAnalyzed.slice(0, topN);
+    const notSelected = allAnalyzed.slice(topN);
+
+    // Populate Selected Candidates Table
+    const selectedTbody = document.getElementById('selected-candidates-tbody');
+    selectedTbody.innerHTML = '';
+
+    if (selected.length === 0) {
+        selectedTbody.innerHTML = '<tr><td colspan="4" style="text-align: center; opacity: 0.6;">No selected candidates</td></tr>';
+    } else {
+        selected.forEach(cand => {
+            const pdfUrl = `/reports/${lastAnalysisData.campaign_folder}/All_Resumes/${cand.filename}`;
+            const row = document.createElement('tr');
+            row.innerHTML = `
+                <td>${cand.name || 'Unknown'}</td>
+                <td>${cand.email || 'N/A'}</td>
+                <td><span class="score-pill">${cand.score.total}</span></td>
+                <td>
+                    <a href="${pdfUrl}" target="_blank" class="glass-btn secondary-btn" style="padding: 6px 12px; font-size: 12px;">
+                        <i data-lucide="file-text" style="width: 14px; height: 14px;"></i> View PDF
+                    </a>
+                </td>
+            `;
+            selectedTbody.appendChild(row);
+        });
+    }
+
+    // Populate Not Selected Candidates Table
+    const notSelectedTbody = document.getElementById('notselected-candidates-tbody');
+    notSelectedTbody.innerHTML = '';
+
+    if (notSelected.length === 0) {
+        notSelectedTbody.innerHTML = '<tr><td colspan="4" style="text-align: center; opacity: 0.6;">No not-selected candidates</td></tr>';
+    } else {
+        notSelected.forEach(cand => {
+            const pdfUrl = `/reports/${lastAnalysisData.campaign_folder}/All_Resumes/${cand.filename}`;
+            const row = document.createElement('tr');
+            row.innerHTML = `
+                <td>${cand.name || 'Unknown'}</td>
+                <td>${cand.email || 'N/A'}</td>
+                <td><span class="score-pill">${cand.score.total}</span></td>
+                <td>
+                    <a href="${pdfUrl}" target="_blank" class="glass-btn secondary-btn" style="padding: 6px 12px; font-size: 12px;">
+                        <i data-lucide="file-text" style="width: 14px; height: 14px;"></i> View PDF
+                    </a>
+                </td>
+            `;
+            notSelectedTbody.appendChild(row);
+        });
+    }
+
+    // Show modal
+    modal.classList.remove('hidden');
+    lucide.createIcons();
+}
+
+function closeCandidatesModal() {
+    const modal = document.getElementById('candidates-modal');
+    modal.classList.add('hidden');
+}
+
+// Close modal on outside click
+document.getElementById('candidates-modal')?.addEventListener('click', (e) => {
+    if (e.target.id === 'candidates-modal') {
+        closeCandidatesModal();
+    }
+});
+
+// Render similarity-only cards (for candidates not AI-analyzed)
+function renderSimilarityCard(item, container, index) {
+    const card = document.createElement('div');
+    card.className = 'candidate-card similarity-card animate-slide-up';
+    card.style.animationDelay = `${index * 0.1}s`;
+    card.style.opacity = '0.85';
+    card.style.border = '1px solid rgba(107, 114, 128, 0.3)';
+
+    const pdfUrl = `/reports/${lastAnalysisData.campaign_folder}/All_Resumes/${item.filename}`;
+    const vectorScore = item.vector_score || 0;
+
+    card.innerHTML = `
+        <div class="card-header-row">
+            <h4>${item.name || 'Unknown'}</h4>
+            <span class="status-badge" style="background: rgba(107, 114, 128, 0.2); color: #9ca3af;">
+                Similarity Only
+            </span>
+        </div>
+        
+        <div class="score-row" style="margin-top: 12px;">
+            <div class="score-item">
+                <span class="score-label">Semantic Match</span>
+                <span class="score-value" style="color: #9ca3af;">${(vectorScore * 100).toFixed(1)}%</span>
+            </div>
+        </div>
+        
+        <div class="info-grid" style="margin-top: 16px;">
+            <div class="info-item">
+                <i data-lucide="mail"></i>
+                <span>${item.email || 'N/A'}</span>
+            </div>
+        </div>
+        
+        <p style="margin-top: 12px; opacity: 0.6; font-size: 13px; display: flex; align-items: center; gap: 6px;">
+            <i data-lucide="info" style="width: 14px; height: 14px;"></i>
+            Not selected for detailed AI analysis (ranked by similarity only)
+        </p>
+        
+        <div class="card-actions" style="margin-top: 16px;">
+            <a href="${pdfUrl}" target="_blank" class="action-btn" style="background: rgba(107, 114, 128, 0.1);">
+                <i data-lucide="file-text"></i> View Resume
+            </a>
+        </div>
+    `;
+
+    container.appendChild(card);
+}

@@ -1,6 +1,8 @@
 
 import sys
 import os
+import importlib.util
+import traceback
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
@@ -13,25 +15,56 @@ project_root = os.path.dirname(os.path.dirname(current_dir)) # Resume-Screening-
 sys.path.append(project_root)
 
 # 2. Import Both Apps
+# 2. Import Apps with Module Isolation
+
+# --- Load Resume App ---
 from .main import app as resume_app
 
-# Import JD Generator App
-# We need to act like we are inside JD_Generator for its internal imports to work
-# This is tricky because JD_Generator.backend.main imports 'agent' which expects to be in path
+# --- Load JD Generator App ---
 jd_backend_path = os.path.join(project_root, "JD_Generator", "backend")
-sys.path.append(jd_backend_path)
+sys.path.insert(0, jd_backend_path) # Priority Path
 
 try:
-    from JD_Generator.backend.main import app as jd_app
-except ImportError:
-    # Fallback if direct import fails due to package structure
-    # We dynamically import the module file
-    import importlib.util
-    spec = importlib.util.spec_from_file_location("jd_main", os.path.join(jd_backend_path, "main.py"))
+    # Prevent 'agent' module collision
+    if 'agent' in sys.modules:
+        del sys.modules['agent']
+    
+    # Dynamic Import
+    spec = importlib.util.spec_from_file_location("jd_main_pkg", os.path.join(jd_backend_path, "main.py"))
     jd_module = importlib.util.module_from_spec(spec)
-    sys.modules["jd_main"] = jd_module
+    sys.modules["jd_main_pkg"] = jd_module
     spec.loader.exec_module(jd_module)
     jd_app = jd_module.app
+    print("✅ JD App Loaded Successfully")
+except Exception as e:
+    print(f"❌ Failed to load JD App: {e}")
+    jd_app = FastAPI()
+finally:
+    # Cleanup path to avoid leaking into Aptitude
+    if jd_backend_path in sys.path:
+        sys.path.remove(jd_backend_path)
+
+# --- Load Aptitude Generator App ---
+aptitude_backend_path = os.path.join(project_root, "Aptitude_Generator", "backend")
+sys.path.insert(0, aptitude_backend_path)
+
+try:
+    # Prevent collision again (Force reload of 'agent' for Aptitude context)
+    if 'agent' in sys.modules:
+        del sys.modules['agent']
+        
+    spec = importlib.util.spec_from_file_location("aptitude_main_pkg", os.path.join(aptitude_backend_path, "main.py"))
+    aptitude_module = importlib.util.module_from_spec(spec)
+    sys.modules["aptitude_main_pkg"] = aptitude_module
+    spec.loader.exec_module(aptitude_module)
+    aptitude_app = aptitude_module.app
+    print("✅ Aptitude App Loaded Successfully")
+except Exception as e:
+    print(f"❌ Failed to load Aptitude App: {e}")
+    traceback.print_exc()
+    aptitude_app = FastAPI()
+finally:
+    sys.path.remove(aptitude_backend_path)
 
 # 3. Create Unified App
 app = FastAPI(title="Unified RecruitAI Server")
@@ -254,6 +287,17 @@ if os.path.exists(jd_frontend_path):
 else:
     print(f"⚠️ Warning: JD Frontend path not found: {jd_frontend_path}")
 
+# Mount Aptitude App
+app.mount("/aptitude-api", aptitude_app)
+
+# Mount Aptitude Frontend
+aptitude_frontend_path = os.path.join(project_root, "Aptitude_Generator", "frontend")
+if os.path.exists(aptitude_frontend_path):
+    app.mount("/aptitude", StaticFiles(directory=aptitude_frontend_path, html=True), name="aptitude_frontend")
+    print(f"✅ Aptitude Frontend mounted at /aptitude (Path: {aptitude_frontend_path})")
+else:
+    print(f"⚠️ Warning: Aptitude Frontend path not found: {aptitude_frontend_path}")
+
 # Explicitly Mount Reports Directory (Fix for PDF Links)
 reports_dir = os.path.join(current_dir, "Reports") # Backend/app/../Reports -> Backend/Reports actually?
 # wait, current_dir is Backend/app. We want Backend/Reports usually?
@@ -264,7 +308,19 @@ if not os.path.exists(reports_path): os.makedirs(reports_path)
 app.mount("/reports", StaticFiles(directory=reports_path), name="reports")
 print(f"✅ Reports mounted at /reports (Path: {reports_path})")
 
-# Mount Resume App Routes specifically or Just Include Router?
-app.mount("/", resume_app)
+# Mount Resume Frontend
+resume_frontend_path = os.path.join(project_root, "Frontend")
+if os.path.exists(resume_frontend_path):
+    app.mount("/resume", StaticFiles(directory=resume_frontend_path, html=True), name="resume_frontend")
+    print(f"✅ Resume Frontend mounted at /resume (Path: {resume_frontend_path})")
+else:
+    print(f"⚠️ Warning: Resume Frontend path not found: {resume_frontend_path}")
 
-print("✅ Unified Server Started: Resume Agent on / + JD Generator on /jd-api")
+# Mount Resume App Routes at /api to avoid root conflict
+app.mount("/api", resume_app)
+
+# Mount Frontend at Root (Catch-All) - This MUST be last
+if os.path.exists(resume_frontend_path):
+    app.mount("/", StaticFiles(directory=resume_frontend_path, html=True), name="resume_frontend_root")
+
+print("✅ Unified Server Started: Resume API at /api + JD at /jd-api + Aptitude at /aptitude-api")

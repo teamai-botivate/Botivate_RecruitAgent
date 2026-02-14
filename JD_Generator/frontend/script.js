@@ -14,7 +14,7 @@ const downloadBtn = document.getElementById('download-btn');
 
 // --- Persistent Form Data (Step 1 Only) ---
 const persistentFields = ['company-name', 'company-type', 'industry', 'location'];
-const temporaryFields = ['role-title', 'experience', 'employment-type', 'work-mode'];
+const temporaryFields = ['role-title', 'experience', 'employment-type', 'work-mode', 'salary'];
 
 function savePersistentData() {
     const data = {};
@@ -157,11 +157,12 @@ jdForm.addEventListener('submit', async (e) => {
         roleTitle: document.getElementById('role-title').value,
         experience: document.getElementById('experience').value,
         employmentType: document.getElementById('employment-type').value,
-        workMode: document.getElementById('work-mode').value
+        workMode: document.getElementById('work-mode').value,
+        salary: document.getElementById('salary').value
     };
 
     try {
-        const response = await fetch('http://127.0.0.1:8000/jd-api/generate-jd', {
+        const response = await fetch('/jd-api/generate-jd', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(formData)
@@ -186,14 +187,25 @@ jdForm.addEventListener('submit', async (e) => {
 });
 
 function displayResult(content) {
-    // Format headings: "1. COMPANY NAME:" -> emboldened with primary color
-    let formattedContent = content
-        .replace(/^(\d+\.\s+[A-Z\s]+:)/gm, '<span class="jd-heading">$1</span>')
-        // Ensure bold markdown or stars if AI used them are also handled
-        .replace(/\*\*(.*?)\*\*/g, '<b>$1</b>')
-        .replace(/\*(.*?)\*/g, '<b>$1</b>');
+    // 1. Clean up excessive newlines
+    content = content.replace(/\n{3,}/g, '\n\n').trim();
 
-    jdOutput.innerHTML = formattedContent;
+    // 2. Tighten up bullet points by removing extra newlines between lines starting with "*"
+    content = content.replace(/(\n\s*\*\s+.*)\n+(?=\s*\*)/g, '$1\n');
+
+    // 3. Format headings: "1. COMPANY NAME:" -> emboldened with primary color
+    let f = content
+        .replace(/^(\d+\.\s+[A-Z\s&().-]+:)/gm, '<span class="jd-heading">$1</span>')
+        // 4. Convert "* " bullets into styled dots
+        .replace(/^\s*\*\s+(.*)$/gm, '<div class="jd-list-item"><span class="bullet">•</span> $1</div>')
+        // 5. Ensure bold markdown is handled
+        .replace(/\*\*(.*?)\*\*/g, '<b>$1</b>');
+
+    // 6. Final cleanup: Remove newlines that appear right after we close a div
+    // This prevents "pre-wrap" from adding a blank line between list items
+    f = f.replace(/(<\/div>)\n/g, '$1');
+
+    jdOutput.innerHTML = f;
     resultSection.classList.remove('hidden');
     resultSection.scrollIntoView({ behavior: 'smooth' });
 }
@@ -224,6 +236,16 @@ downloadBtn.addEventListener('click', () => {
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
 });
+
+// --- Proceed Logic ---
+const proceedBtn = document.getElementById('proceed-btn');
+if (proceedBtn) {
+    proceedBtn.addEventListener('click', () => {
+        const text = jdOutput.innerText; // Use innerText to preserve line breaks
+        localStorage.setItem('recruiter_generated_jd', text);
+        window.location.href = '/';
+    });
+}
 
 // --- Mock AI Generator Logic ---
 function mockGenerateJD(data) {
