@@ -75,7 +75,7 @@ def complete_job(job_id: str, result: dict):
         logger.info(f"[Job {job_id}] COMPLETED Successfully.")
 
 # --- CORE PIPELINE (Async Worker) ---
-async def _run_async_analysis(job_id: str, jd_text: str, source_dir: str, top_n: int, jd_source_name: str):
+async def _run_async_analysis(job_id: str, jd_text: str, source_dir: str, top_n: int, jd_source_name: str, gmail_metadata: Dict = {}):
     try:
         update_job_progress(job_id, 5, "Initializing Pipeline...")
         
@@ -193,7 +193,9 @@ async def _run_async_analysis(job_id: str, jd_text: str, source_dir: str, top_n:
                          "status": "Pending",
                          "extracted_skills": score_data.get('matched_keywords', []),
                          "years_of_experience": 0.0,
-                         "file_hash": result['hash']
+                        "file_hash": result['hash'],
+                         "email_subject": gmail_metadata.get(fname, {}).get("email_subject", ""),
+                         "email_body": gmail_metadata.get(fname, {}).get("email_body", "")
                     })
                 
                 # Progress Update
@@ -208,6 +210,8 @@ async def _run_async_analysis(job_id: str, jd_text: str, source_dir: str, top_n:
         rejected_candidates = [c for c in processed_candidates if c['score'].get('is_rejected', False)]
         
         logger.info(f"   🛑 Pass 1 (Page Filter) Complete: {len(processed_candidates)} Processed. (Valid: {len(valid_candidates)})")
+        if rejected_candidates:
+             logger.info(f"      ❌ Rejected (Page Filter): {[c['filename'] for c in rejected_candidates]}")
 
         # 3. PASS 2: ROLE FILTERING (Semantic - Zero Cost)
         # Filter resumes by job title match BEFORE expensive AI analysis
@@ -256,6 +260,12 @@ async def _run_async_analysis(job_id: str, jd_text: str, source_dir: str, top_n:
                 role_unclear.append(candidate)
         
         logger.info(f"   📊 Role Filter: ✅ {len(role_matched)} matched | ❌ {len(role_skipped)} skipped (wrong role) | ⚠️ {len(role_unclear)} unclear")
+        if role_matched:
+             logger.info(f"      ✅ Matched: {[c['filename'] for c in role_matched]}")
+        if role_skipped:
+             logger.info(f"      ❌ Skipped: {[c['filename'] for c in role_skipped]}")
+        if role_unclear:
+             logger.info(f"      ⚠️ Unclear: {[c['filename'] for c in role_unclear]}")
         
         # Combine matched + unclear for further processing
         vector_candidates = role_matched + role_unclear
@@ -290,8 +300,20 @@ async def _run_async_analysis(job_id: str, jd_text: str, source_dir: str, top_n:
                 else:
                     logger.info("   ⏩ All resumes already in Vector DB. Skipping embedding.")
                 
-                # 3. Search matched results
-                results = vector_service.vector_service.search(jd_clean, k=len(vector_candidates))
+                # 3. Search matched results (SCOPED to current candidates)
+                candidate_filenames = [c['filename'] for c in vector_candidates]
+                
+                # Create Filter to ignore global DB noise
+                if len(candidate_filenames) == 1:
+                    search_filter = {"filename": candidate_filenames[0]}
+                else:
+                    search_filter = {"filename": {"$in": candidate_filenames}}
+                
+                results = vector_service.vector_service.search(
+                    jd_clean, 
+                    k=len(vector_candidates),
+                    filter=search_filter
+                )
                 
                 # Debug: Log raw distances
                 debug_raw_scores = [(doc.metadata['filename'], score) for doc, score in results]
@@ -369,19 +391,21 @@ async def _run_async_analysis(job_id: str, jd_text: str, source_dir: str, top_n:
                     c['score']['total'] = 0
 
         # Re-Sort Final List
-        valid_candidates.sort(key=lambda x: x['score']['total'], reverse=True)
-        top_candidates = valid_candidates[:top_n]
-        remaining = valid_candidates[top_n:]
+        # Re-Sort Final List (Using Filtered Role Match Candidates Only)
+        vector_candidates.sort(key=lambda x: x['score']['total'], reverse=True)
+        top_candidates = vector_candidates[:top_n]
+        remaining = vector_candidates[top_n:]
 
         update_job_progress(job_id, 75, f"Identified Top {len(top_candidates)} Candidates. Running AI Analysis...")
 
         # 4. AI ANALYSIS (Pass 3 - The Deep Dive)
         # Smart Selection: Analyze Top N + 2 candidates (Conservative to avoid Rate Limits)
+        # Smart Selection: Analyze Top N + 2 candidates (Conservative to avoid Rate Limits)
         analysis_limit = min(15, top_n + 5) 
-        if len(valid_candidates) < analysis_limit:
-            ai_target = valid_candidates
+        if len(vector_candidates) < analysis_limit:
+            ai_target = vector_candidates
         else:
-            ai_target = valid_candidates[:analysis_limit]
+            ai_target = vector_candidates[:analysis_limit]
 
         logger.info(f"   🎯 Pass 3: Selecting Top {len(ai_target)} for AI Analysis (Buffer: {analysis_limit} vs Request: {top_n}).")
         
@@ -761,6 +785,7 @@ async def start_analysis(
 
         # 4. Handle Files (Stream to Disk immediately)
         files_found = False
+        gmail_metadata = {} # Initialize to avoid UnboundLocalError
         
         # Source A: Manual
         if resume_files:
@@ -788,19 +813,32 @@ async def start_analysis(
                 
                 if gmail_resumes:
                     logger.info(f"✅ Fetched {len(gmail_resumes)} resumes from Gmail")
+                    
+                    # Create Metadata Map {filename: {subject, body}}
+                    # gmail_metadata is already dict
+                    
                     for item in gmail_resumes:
                         # Save with [Gmail] prefix to distinguish source
-                        fpath = os.path.join(temp_dir, f"[Gmail] {item['filename']}")
+                        safe_fname = f"[Gmail] {item['filename']}"
+                        fpath = os.path.join(temp_dir, safe_fname)
+                        
+                        gmail_metadata[safe_fname] = {
+                            "email_subject": item["email_subject"],
+                            "email_body": item["email_body"]
+                        }
+                        
                         with open(fpath, "wb") as f:
                             f.write(item["content"])
                         
                         # Store email metadata for role matching (done in pipeline)
                         # We'll pass this through somehow - for now just log
                         logger.info(f"  📧 From: '{item['email_subject']}'")
-                    
+                        
+                else: 
+                     logger.info("No resumes found in Gmail range.")
+                     
+                if gmail_resumes:
                     files_found = True
-                else:
-                    logger.info("No resumes found in Gmail for the specified date range")
             
             except ValueError as e:
                 # Gmail not connected error
@@ -817,8 +855,8 @@ async def start_analysis(
              raise HTTPException(status_code=400, detail="No resumes provided. Please upload files or select a valid date range for Gmail.")
 
         # 5. Spawn Background Task
-        # (job_id: str, jd_text: str, source_dir: str, top_n: int, jd_source_name: str)
-        background_tasks.add_task(_run_async_analysis, job_id, jd_text, temp_dir, top_n, jd_source)
+        # (job_id: str, jd_text: str, source_dir: str, top_n: int, jd_source_name: str, gmail_metadata: dict)
+        background_tasks.add_task(_run_async_analysis, job_id, jd_text, temp_dir, top_n, jd_source, gmail_metadata)
 
         return {"job_id": job_id, "status": "processing"}
 

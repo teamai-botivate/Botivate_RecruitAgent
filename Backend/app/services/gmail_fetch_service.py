@@ -6,7 +6,7 @@ Fetches resume attachments from Gmail using OAuth credentials
 import base64
 import email
 import logging
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import List, Dict
 from googleapiclient.discovery import build
 
@@ -55,9 +55,21 @@ class GmailFetchService:
             # Get authenticated Gmail service
             service = gmail_oauth_service.get_gmail_service(self.COMPANY_ID)
             
+            # CRITICAL FIX: Increment end_date by 1 day because Gmail 'before:' is exclusive.
+            # If start=2026-02-14 and end=2026-02-14, query 'after:..14 before:..14' returns nothing.
+            # We want 'after:..14 before:..15' to cover the 14th.
+            try:
+                end_dt = datetime.strptime(end_date, "%Y-%m-%d")
+                end_dt_inc = end_dt + timedelta(days=1)
+                effective_end_date = end_dt_inc.strftime("%Y-%m-%d")
+            except ValueError:
+                # Fallback if date format is weird, though it should be YYYY-MM-DD
+                logger.warning(f"Date format warning: {end_date}. Using original.")
+                effective_end_date = end_date
+
             # Build search query
             # Search for emails with attachments in date range
-            query = f'has:attachment after:{start_date} before:{end_date}'
+            query = f'has:attachment after:{start_date} before:{effective_end_date}'
             
             logger.info(f"Searching Gmail with query: {query}")
             

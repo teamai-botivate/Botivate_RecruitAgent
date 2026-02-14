@@ -25,9 +25,9 @@ class VectorService:
         """Add documents to the vector store."""
         return self.db.add_texts(texts=texts, metadatas=metadatas)
 
-    def search(self, query: str, k: int = 5):
+    def search(self, query: str, k: int = 5, filter: dict = None):
         """Perform semantic search."""
-        return self.db.similarity_search_with_score(query, k=k)
+        return self.db.similarity_search_with_score(query, k=k, filter=filter)
 
     def check_semantic_skills(
         self, 
