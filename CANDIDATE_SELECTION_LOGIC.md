@@ -69,7 +69,7 @@ These 40 candidates are now ranked based on **Vector Similarity** to the Job Des
 | **Selected (Top 5)** | 5 | ✅ Selected | **Send Assessment Link** |
 | **AI Rejected (Rank 6-10)** | 5 | ❌ Not Selected | **Send Rejection Email** |
 | **Similarity Rejected (Rank 11-40)** | 30 | ❌ Not Selected | **Send Rejection Email** |
-| **Hard Rejected (Page/Role)** | 60 | ❌ Rejected/Skipped | **Send Rejection Email** (Optional) |
+| **Hard Rejected (Page/Role)** | 60 | ❌ Rejected/Skipped | **IGNORED** (No Email Sent) |
 
 This logic ensures:
 1.  **Efficiency:** Only high-potential candidates get expensive AI analysis.
