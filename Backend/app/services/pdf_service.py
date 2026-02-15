@@ -58,7 +58,71 @@ class PDFService:
         text = text.replace('\x00', '')
         # Fix multiple newlines
         import re
-        text = re.sub(r'\n\s*\n', '\n\n', text)
+        text = re.sub(r'\n{3,}', '\n\n', text)
         return text.strip()
+
+    def extract_emails_advanced(self, file_content: bytes) -> str:
+        """
+        Advanced Email Extraction using PyMuPDF (fitz).
+        Extracts both visible text and hidden mailto: links.
+        Returns the first valid email found, or empty string.
+        """
+        import fitz
+        import re
+        
+        found_emails = [] # Use list to preserve order of appearance (usually better than set)
+        email_pattern = r'[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+'
+        
+        try:
+            # fitz needs bytes stream
+            with fitz.open(stream=file_content, filetype="pdf") as doc:
+                for page in doc:
+                    # 1. Visible Text
+                    text = page.get_text("text")
+                    text_emails = re.findall(email_pattern, text)
+                    for email in text_emails:
+                        if email not in found_emails:
+                            found_emails.append(email)
+                        
+                    # 2. Hyperlinks (mailto: or raw email in URI)
+                    links = page.get_links()
+                    for link in links:
+                        if "uri" in link:
+                            uri = link["uri"].strip()
+                            email = ""
+                            
+                            # Case A: mailto: prefix
+                            if uri.startswith("mailto:"):
+                                email = uri.replace("mailto:", "").strip()
+                            # Case B: Raw email in URI (common in some PDF generators)
+                            elif "@" in uri and "." in uri and not uri.startswith("http") and not uri.startswith("www"):
+                                email = uri
+                                
+                            # Clean potential query params (?subject=...)
+                            if "?" in email:
+                                email = email.split("?")[0]
+                                
+                            if email and email not in found_emails:
+                                found_emails.append(email)
+                                
+            # Filter out Placeholders
+            valid_emails = []
+            placeholders = ["[email]", "email@example.com", "name@email.com", "yourname@email.com", "user@domain.com", "email"]
+            
+            for email in found_emails:
+                clean_email = email.lower().strip()
+                if clean_email not in placeholders and "example.com" not in clean_email and "@" in email and "." in email:
+                    valid_emails.append(email)
+            
+            # Return first VALID one found
+            if valid_emails:
+                return valid_emails[0]
+            
+            # If no valid email found, return empty
+            return ""
+            
+        except Exception as e:
+            print(f"Advanced Email Extraction Failed: {e}")
+            return ""
 
 pdf_service = PDFService()

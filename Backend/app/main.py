@@ -135,9 +135,21 @@ async def _run_async_analysis(job_id: str, jd_text: str, source_dir: str, top_n:
                 # Calculate Hash
                 file_hash = hashlib.md5(file_bytes).hexdigest()
                 
-                # Extract Email (Regex Fallback)
-                email_match = re.search(r'[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}', text)
-                extracted_email = email_match.group(0) if email_match else ""
+                # Extract Email (Advanced + Regex Fallback)
+                extracted_email = ""
+                if fname.lower().endswith(".pdf"):
+                    try:
+                         extracted_email = pdf_service.pdf_service.extract_emails_advanced(file_bytes)
+                    except Exception as e:
+                        print(f"Advanced Email Extraction Error for {fname}: {e}")
+
+                if not extracted_email:
+                    # Fallback to Regex on text
+                    email_match = re.search(r'[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}', text)
+                    extracted_email = email_match.group(0) if email_match else ""
+                
+                # DEBUG LOG
+                print(f"   🕵️ DEBUG: Extracted Email for {fname}: '{extracted_email}'")
                 
                 clean_text = utils.clean_text(text)
                 
@@ -157,6 +169,7 @@ async def _run_async_analysis(job_id: str, jd_text: str, source_dir: str, top_n:
                 return {"status": "error", "fname": fname, "error": str(e)}
 
         # Run Parallel
+        processed_filenames = set()
         with concurrent.futures.ThreadPoolExecutor(max_workers=5) as executor:
             future_to_file = {executor.submit(process_single_file, f): f for f in all_files}
             
@@ -179,6 +192,16 @@ async def _run_async_analysis(job_id: str, jd_text: str, source_dir: str, top_n:
                 
                 logger.info(f"   📄 Parsed: {fname} ({len(text)} chars) | Pages: {pages}")
 
+                # STRICT EMAIL LOGIC: Only from PDF Content
+                final_email = result['email']
+                
+                # if not final_email and gmail_metadata... REMOVED AS REQUESTED
+
+                # Prevent Duplicates
+                if fname in processed_filenames:
+                    continue
+                processed_filenames.add(fname)
+
                 if score_data.get("is_rejected"):
                      reason = score_data.get("rejection_reason", "Unknown")
                      logger.warning(f"   ❌ REJECTED (Hard Rule): {fname} | Reason: {reason}")
@@ -188,7 +211,7 @@ async def _run_async_analysis(job_id: str, jd_text: str, source_dir: str, top_n:
                          "score": score_data, 
                          "status": "Rejected",
                          "file_hash": result['hash'],
-                         "email": result['email']
+                         "email": final_email
                      })
                 else:
                     processed_candidates.append({
@@ -202,7 +225,7 @@ async def _run_async_analysis(job_id: str, jd_text: str, source_dir: str, top_n:
                         "file_hash": result['hash'],
                          "email_subject": gmail_metadata.get(fname, {}).get("email_subject", ""),
                          "email_body": gmail_metadata.get(fname, {}).get("email_body", ""),
-                         "email": result['email']
+                         "email": final_email
                     })
                 
                 # Progress Update
@@ -212,6 +235,9 @@ async def _run_async_analysis(job_id: str, jd_text: str, source_dir: str, top_n:
 
 
         # 3. VECTOR ANALYSIS (PURE SEMANTIC - ALL VALID CANDIDATES)
+        # Ensure Update Job Store with Initial Parse Results (CRITICAL FIX)
+        jobs[job_id]["candidates"] = processed_candidates
+
         # Filter strictly those who passed the Page Check
         valid_candidates = [c for c in processed_candidates if not c['score'].get('is_rejected', False)]
         rejected_candidates = [c for c in processed_candidates if c['score'].get('is_rejected', False)]
@@ -552,13 +578,24 @@ async def _run_async_analysis(job_id: str, jd_text: str, source_dir: str, top_n:
         if img_analysis:
             for ai_res in img_analysis:
                 # Find original candidate object
-                # We need to search in the main job list
-                target_cand = next((c for c in jobs[job_id].get("candidates", []) if c["filename"] == ai_res.get("filename")), None)
+                # SEARCH IN vector_candidates to ensure we update the main list directly
+                target_cand = next((c for c in vector_candidates if c["filename"] == ai_res.get("filename")), None)
                 
                 if target_cand:
+                    # SAFEGUARD: Capture Original Email
+                    original_email = target_cand.get('email', '')
+
                     # Update Fields
-                    target_cand['candidate_name'] = ai_res.get('candidate_name', target_cand.get('candidate_name'))
-                    target_cand['email'] = ai_res.get('email', target_cand.get('email'))
+                    new_name = ai_res.get('candidate_name')
+                    if new_name and "CANDIDATE" not in new_name.upper() and "NAME" not in new_name.upper() and "[" not in new_name:
+                         target_cand['candidate_name'] = new_name
+                    
+                    # ---------------------------------------------------------
+                    # EMAIL LOGIC: WE DO NOT UPDATE EMAIL FROM AI
+                    # PyMuPDF/Regex is authoritative. AI often returns placeholders.
+                    # ---------------------------------------------------------
+                    logger.info(f"      🕵️ DEBUG: AI found email '{ai_res.get('email')}' for {target_cand['filename']} but ignoring it. Keeping: '{target_cand.get('email')}'")
+                    
                     target_cand['phone'] = ai_res.get('phone', target_cand.get('phone'))
                     target_cand['extracted_skills'] = ai_res.get('extracted_skills', [])
                     target_cand['status'] = ai_res.get('status', 'Review Required')
@@ -587,7 +624,10 @@ async def _run_async_analysis(job_id: str, jd_text: str, source_dir: str, top_n:
                     target_cand["score"]["experience_score"] = round(new_exp_score, 1)
                     target_cand["score"]["keyword_score"] = len(ai_skills) # Just count for display
                     
-                    logger.info(f"   🤖 Re-Ranked {target_cand['filename']}: {current_total} -> {new_total} (Bonus: +{bonus})")
+                    # FINAL RESTORE: Force Email Back
+                    target_cand['email'] = original_email
+                    
+                    logger.info(f"   🤖 Re-Ranked {target_cand['filename']}: {current_total} -> {new_total} (Bonus: +{bonus}) | Email Kept: '{original_email}'")
         update_job_progress(job_id, 90, "Generating Final Reports...")
 
         # 5. GENERATE REPORTS
@@ -619,90 +659,45 @@ async def _run_async_analysis(job_id: str, jd_text: str, source_dir: str, top_n:
 
 
         # Prepare Final Result Payload
-        # We need to merge AI analysis back into the top candidates AND Re-Rank based on AI opinion!
+        # 5b. PREPARE FINAL RESULT PAYLOAD (Display Logic Only)
+        # The scores and data were already updated in the AI loop above (Pass 4b).
+        # This block ensures UI fields (breakdown, etc.) are populated without double-counting.
         
-        # Robust Logic: Handle [Email] prefixes and other noise
-        ai_map = {}
-        # Ensure img_analysis exists
-        if 'img_analysis' not in locals(): img_analysis = []
-            
-        for item in img_analysis:
-            raw_name = item.get('filename', '')
-            if raw_name:
-                # Store multiple keys for robust lookup
-                ai_map[raw_name] = item
-                
-                # key 2: Clean name (Remove ANY brackets like [Email] or [Extracted])
-                clean_name = re.sub(r'\[.*?\]', '', raw_name).strip()
-                ai_map[clean_name] = item
-                
-                # key 3: Just Os.path.basename
-                base_name = os.path.basename(raw_name)
-                ai_map[base_name] = item
-
         updated_top_candidates = []
         for c in top_candidates:
-            # Try to match filename
-            fname = c['filename']
-            # Remove ANY brackets
-            fname_clean = re.sub(r'\[.*?\]', '', fname).strip()
-            fname_base = os.path.basename(fname)
+            # Check if AI result exists for this candidate
+            # We can check 'achievement_bonus' key which is set in AI loop
+            is_analyzed = c.get('ai_analyzed', False)
             
-            # Waterfall lookup
-            ai_data = ai_map.get(fname) or ai_map.get(fname_clean) or ai_map.get(fname_base)
+            current_total = c['score']['total']
+            bonus = c.get('achievement_bonus', 0)
+            base_score = max(0, current_total - bonus) # Reverse calc for display
             
-            if ai_data: # If AI analyzed this candidate
-                status = ai_data.get('status', 'Review Required')
+            if is_analyzed:
+                status = c.get('status', 'Review Required')
                 
-                # Dynamic Bonus from AI (1-15)
-                # LLM should return integer. If missing, default to 0.
-                bonus = ai_data.get('achievement_bonus', 0)
+                # Detailed breakdown for Frontend "View Details"
+                c['score']['breakdown'] = {
+                    "Base Score": round(base_score, 1),
+                    "AI Bonus": bonus,
+                    "Final Score": current_total,
+                    "Status": status
+                }
+                c['score']['breakdown_text'] = f"Base: {base_score:.1f} | Bonus: {bonus:+d} | Final: {current_total:.1f}"
                 
-                # Validation: Ensure bonus is somewhat reasonable (-20 to +20)
-                try: 
-                    bonus = int(bonus)
-                except: 
-                    bonus = 0
-
-                # Update Total Score
-                old_score = c['score']['total']
-                new_score = round(min(100, max(0, old_score + bonus)), 1)
-                
-                c['score']['total'] = new_score
-                c['score']['ai_adjustment'] = bonus
-                c['score']['original_score'] = old_score
-                
-                # Merge qualitative data (reasoning, strengths)
-                # Merge qualitative data (reasoning, strengths)
-                c.update(ai_data)
-
-                # FALLBACK: If AI returned empty skills, use Keyword Match
+                # FALLBACK: Ensure skills are present
                 if not c.get('extracted_skills'):
                     c['extracted_skills'] = c['score'].get('matched_keywords', [])
 
-                # FALLBACK: If AI returned 0 exp, try to use Regex Exp (if stored) or keep 0
-                # We don't have regex exp explicitly in 'score' dict usually, but let's check
-                if not c.get('years_of_experience') or c.get('years_of_experience') == 0:
-                     # If we had regex exp in score, use it. But usually we don't store it separate from score calc.
-                     # Let's AT LEAST ensure it's not None
-                     c['years_of_experience'] = 0.0
-                
-                logger.info(f"   🤖 Re-Ranked {fname}: {old_score} -> {new_score} (Bonus: {bonus})")
-                
-                # Detailed breakdown for Frontend "View Details"
-                # Providing object for structured view, and text for simple view
-                c['score']['breakdown'] = {
-                    "Base Score": old_score,
-                    "AI Bonus": bonus,
-                    "Final Score": new_score,
-                    "Status": status
-                }
-                c['score']['breakdown_text'] = f"Base: {old_score} | Bonus: {bonus:+d} | Final: {new_score}"
-                
             else:
                  # No AI Analysis
-                 c['score']['breakdown'] = { "Base Score": c['score']['total'], "AI Bonus": 0, "Final": c['score']['total'] }
-                 c['score']['breakdown_text'] = f"Base: {c['score']['total']} (No AI Analysis)"
+                 c['score']['breakdown'] = { 
+                     "Base Score": current_total, 
+                     "AI Bonus": 0, 
+                     "Final": current_total,
+                     "Status": "Pending"
+                 }
+                 c['score']['breakdown_text'] = f"Base: {current_total} (No AI Analysis)"
                 
             updated_top_candidates.append(c)
             
@@ -744,26 +739,33 @@ async def _run_async_analysis(job_id: str, jd_text: str, source_dir: str, top_n:
             reverse=True
         )
         
-        # --- EXPORT DATA FOR APTITUDE SYSTEM ---
+        
+        # --- EXPORT DATA FOR APTITUDE SYSTEM & REJECTION ---
+        cutoff = int(top_n)
+        true_selected = final_list[:cutoff] # Rank 1 to N
+        true_rejected = final_list[cutoff:] # Rank N+1 to End
+
         selected_export = []
-        for c in updated_top_candidates:
+        logger.info(f"\n--- 🟢 SELECTED CANDIDATES (Top {cutoff}) ---")
+        for c in true_selected:
+             email = c.get("email", "")
+             logger.info(f"   ✅ {c['filename']} -> Email: {email} (Score: {c['score']['total']})")
              selected_export.append({
                  "name": c.get("candidate_name", c["name"]),
-                 "email": c.get("email", ""), 
+                 "email": email, 
                  "role": jd_data['title'],
-                 "resume": os.path.abspath(f"{report_dir}/Shortlisted_Resumes/{c['filename']}")
+                 "resume": os.path.abspath(f"{report_dir}/Shortlisted_Resumes/{c['filename']}") if c.get('ai_analyzed') else ""
              })
         
         rejected_export = []
-        
-        # ONLY include candidates who were valid for the role but had low scores
-        # We do NOT send rejection emails to:
-        # - Hard-rule rejections (page count violations, etc.)
-        # - Role filter rejections (applied for wrong position)
-        for c in remaining:
+        logger.info(f"\n--- 🔴 NOT SELECTED CANDIDATES (Rank {cutoff+1}+) ---")
+        for c in true_rejected:
+             c['status'] = "Not Selected" # FORCE STATUS for Frontend
+             email = c.get("email", "")
+             logger.info(f"   ❌ {c['filename']} -> Email: {email} (Score: {c['score']['total']})")
              rejected_export.append({
                  "name": c.get("candidate_name", c["name"]),
-                 "email": c.get("email", ""),
+                 "email": email,
                  "role": jd_data['title'],
                  "reason": "Not Selected (Low Score)"
              })
@@ -899,7 +901,8 @@ async def start_analysis(
                         
                         gmail_metadata[safe_fname] = {
                             "email_subject": item["email_subject"],
-                            "email_body": item["email_body"]
+                            "email_body": item["email_body"],
+                            "sender_email": item.get('sender', '')
                         }
                         
                         with open(fpath, "wb") as f:

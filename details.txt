@@ -1,0 +1,53 @@
+
+Abhi ka Current Status aur Next Steps ka detailed breakdown ye raha:
+
+1. Current Logic Status (Selected vs Not Selected)
+Maine pehle identify kiya tha ki current logic me ek galti hai jo selected_export aur rejected_export banate waqt ho rahi hai.
+
+Selected Candidates List (selected_candidates.json):
+Current Code Logic: Ye updated_top_candidates ko export kar raha hai.
+Problem: updated_top_candidates wo Top 10 log hain jo AI analysis ke liye bheje gaye the (Top 5 required + 5 buffer).
+Issue: Iska matlab hai ki Rank 6-10 wale log (jo "AI Rejected" hone chahiye the) wo bhi "Selected" list me ja rahe hain aur unhe Assessment Link milega. Ye galat hai.
+Not Selected Candidates List (not_selected_candidates.json):
+Current Code Logic: Ye sirf remaining list ko export kar raha hai.
+Problem: remaining me sirf wo log hain jo Similarity Score (Rank 11+) wale the.
+Issue: Wo 5 AI Rejected log (Rank 6-10) is list me missing hain. Unhe rejection mail nahi jayega!
+2. Hume Kya Karna Hai (Correction Plan)
+Hume 
+Backend/app/main.py
+ ke end me (Export Section) ye logic sahi karna hai:
+
+Goal:
+
+Selected List: Sirf Top N (Jitna User ne maanga, e.g., 5) hone chahiye.
+Not Selected List:
+AI Rejected (Rank N+1 to AI Limit, e.g., 6-10)
+Similarity Rejected (Rank AI Limit+1 to End, e.g., 11-40)
+New Logic Implementation:
+
+python
+# 1. User ne maanga Top N (e.g., 5)
+top_n_count = int(top_n)
+# 2. Final List (Sorted h already: Rank 1 -> 40)
+# Split karo Top N pe
+true_selected = final_list[:top_n_count]       # Rank 1-5 (Assessment)
+true_rejected = final_list[top_n_count:]       # Rank 6-40 (Rejection)
+# 3. Export Code ab in lists ko use karega
+# ...
+3. Data Kaha Save Ho Raha Hai?
+Jab analysis complete hoti hai, system ek Campaign Folder banata hai Backend/Reports/ ke andar.
+
+Folder Structure:
+Backend/Reports/
+└── Campaign_2024-02-15_23-00-00/  <-- Timestamp wala folder
+    ├── All_Resumes/              <-- Copy of all processed PDFs
+    ├── Shortlisted_Resumes/      <-- Copy of Selected (Top 10 abhi) PDFs
+    ├── selected_candidates.json      <-- Isme "Selected" candidates ka data hai (Email, Name, Score)
+    ├── not_selected_candidates.json  <-- Isme "Not Selected" candidates ka data hai
+    └── analysis_report.json          <-- Full detailed report for UI
+selected_candidates.json: Is file ko Aptitude App padhta hai aur emails extract karta hai assessment bhejne ke liye.
+not_selected_candidates.json: Is file ko Resume App padhta hai "Reject All" button dabane par.
+Action Item:
+Kya main ab wo Correction Wala Logic Backend/app/main.py me implement kar du taaki emails bilkul sahi logo ko jaye? (Rank 1-5 ko Assessment, baaki sabko Rejection).
+
+aur emails ke sath jo list banana tha , unke resume ke sath v selected and not selected candisates ke , wo kaise ho raha h , frontend me v show karna tha , aur iiska ek alag JSOn file bana that jo frontedn me v show ho as a table of select and not seleccted with their email and resume (view resume button) har ek JD ke hisab se humesa naya naya jason banna chahiyue tha uske folder ke sath ye sbka logic kaha h .............., deep analyse karo aur mujhe batao aur ye v batana kya samjhe tum .......

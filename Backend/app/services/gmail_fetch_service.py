@@ -102,12 +102,28 @@ class GmailFetchService:
                         format='full'
                     ).execute()
                     
+                    
                     # Extract subject
                     headers = message['payload'].get('headers', [])
                     subject = next(
                         (h['value'] for h in headers if h['name'].lower() == 'subject'),
                         'No Subject'
                     )
+                    
+                    # Extract Sender (From)
+                    sender_header = next(
+                        (h['value'] for h in headers if h['name'].lower() == 'from'),
+                        ''
+                    )
+                    # Extract pure email from "Name <email@domain.com>"
+                    import re
+                    sender_match = re.search(r'<(.+?)>', sender_header)
+                    sender_email = sender_match.group(1) if sender_match else sender_header
+                    # Cleanup if it's just the email or invalid
+                    if '@' not in sender_email:
+                        sender_email = ""
+                    else:
+                        sender_email = sender_email.strip()
                     
                     # Extract body (simplified - just get first text part)
                     body = self._extract_body(message['payload'])
@@ -162,7 +178,8 @@ class GmailFetchService:
                                         'filename': filename,
                                         'content': file_data,
                                         'email_subject': subject,
-                                        'email_body': body
+                                        'email_body': body,
+                                        'sender': sender_email
                                     })
                                     
                                     logger.info(f"  ✅ Extracted: {filename} from '{subject}'")
@@ -187,6 +204,12 @@ class GmailFetchService:
                                     try:
                                         msg_obj = email.message_from_bytes(eml_content)
                                         
+                                        # Extract Nested Sender
+                                        nested_sender = msg_obj.get('From', sender_email) # Fallback to outer sender
+                                        nested_match = re.search(r'<(.+?)>', nested_sender)
+                                        nested_email = nested_match.group(1) if nested_match else nested_sender
+                                        if '@' not in nested_email: nested_email = ""
+
                                         # Walk through the email to find resume attachments
                                         for sub_part in msg_obj.walk():
                                             sub_fname = sub_part.get_filename()
@@ -203,7 +226,8 @@ class GmailFetchService:
                                                             'filename': f"[Forwarded] {sub_fname}",
                                                             'content': sub_content,
                                                             'email_subject': subject,
-                                                            'email_body': body
+                                                            'email_body': body,
+                                                            'sender': nested_email
                                                         })
                                                         
                                                         logger.info(f"    ✅ Extracted from .eml: {sub_fname}")
