@@ -48,79 +48,79 @@ graph TD
     %% PHASE 1: INTELLIGENT PREPARATION (JD & PRE-WORK)
     %% ---------------------------------------------------------
     subgraph "Phase 1: Agentic Preparation"
-        Recruiter([👤 Recruiter]) -->|1. Inputs Role Basics| JD_UI[💻 JD Generator UI]
+        Recruiter([👤 Recruiter]) -->|1. Inputs Role Basics| JD_UI["💻 JD Generator UI"]
         
-        JD_UI -->|Trigger| JD_Agent[🤖 JD Agent (GPT-4o)]
-        JD_Agent -->|Step A: Market Research| Market_Data[📊 Tech Stack Inference]
-        JD_Agent -->|Step B: ATS Optimization| Keyword_Inject[🔑 Inject Hidden Keywords]
+        JD_UI -->|Trigger| JD_Agent["🤖 JD Agent (GPT-4o)"]
+        JD_Agent -->|Step A: Market Research| Market_Data["📊 Tech Stack Inference"]
+        JD_Agent -->|Step B: ATS Optimization| Keyword_Inject["🔑 Inject Hidden Keywords"]
         
-        Market_Data & Keyword_Inject -->|Generate| JD_Final[📄 Structured JD Output]
+        Market_Data & Keyword_Inject -->|Generate| JD_Final["📄 Structured JD Output"]
         
-        JD_Final -->|2. Auto-Create Test| Apt_UI[⚙️ Assessment Agent]
-        Apt_UI -->|Analyze JD Skills| Q_Gen[🧠 Question Generator]
-        Q_Gen -->|Create 25 MCQs + 4 Code| Test_JSON[📝 Assessment JSON]
+        JD_Final -->|2. Auto-Create Test| Apt_UI["⚙️ Assessment Agent"]
+        Apt_UI -->|Analyze JD Skills| Q_Gen["🧠 Question Generator"]
+        Q_Gen -->|Create 25 MCQs + 4 Code| Test_JSON["📝 Assessment JSON"]
     end
 
     %% ---------------------------------------------------------
     %% PHASE 2: RESUME INGESTION & FILTERING
     %% ---------------------------------------------------------
     subgraph "Phase 2: Ingestion & Filtering"
-        Recruiter -->|3. Upload Resumes| Manual[📂 Manual Upload]
-        Gmail[📧 Gmail Inbox] -->|4. Auto-Fetch| G_Service[📨 Gmail Service]
+        Recruiter -->|3. Upload Resumes| Manual["📂 Manual Upload"]
+        Gmail["📧 Gmail Inbox"] -->|4. Auto-Fetch| G_Service["📨 Gmail Service"]
         
-        G_Service -->|Recursive Scan| EML_Parse[📦 Extract .eml Attachments]
-        Manual & EML_Parse -->|Raw PDFs| OCR[👀 PDF Parser / OCR]
+        G_Service -->|Recursive Scan| EML_Parse["📦 Extract .eml Attachments"]
+        Manual & EML_Parse -->|Raw PDFs| OCR["👀 PDF Parser / OCR"]
         
-        OCR -->|Clean Text| Sanitizer[🧹 Text Cleaner & PII Masker]
+        OCR -->|Clean Text| Sanitizer["🧹 Text Cleaner & PII Masker"]
         
-        Sanitizer -->|Check Metadata| Page_Rule{⚠️ Page Count Rule}
-        Page_Rule -->|Junior > 1 Pg| Reject_1[🔴 REJECT: Non-Compliant]
+        Sanitizer -->|Check Metadata| Page_Rule{"⚠️ Page Count Rule"}
+        Page_Rule -->|Junior > 1 Pg| Reject_1["🔴 REJECT: Non-Compliant"]
         
-        Page_Rule -->|Pass| Role_Guard{🛡️ BART Zero-Shot}
-        Role_Guard -->|Score < 0.45| Skip_1[❌ SKIP: Wrong Role]
+        Page_Rule -->|Pass| Role_Guard{"🛡️ BART Zero-Shot"}
+        Role_Guard -->|Score < 0.45| Skip_1["❌ SKIP: Wrong Role"]
     end
 
     %% ---------------------------------------------------------
     %% PHASE 3: HYBRID SCORING & ANALYSIS
     %% ---------------------------------------------------------
     subgraph "Phase 3: Deep Screening"
-        Role_Guard -->|Pass| Vectorizers[🧬 Vector Embeddings]
+        Role_Guard -->|Pass| Vectorizers["🧬 Vector Embeddings"]
         
         %% SCORING ENGINE
-        Vectorizers -->|Cosine Sim| Score_Sem[📐 Semantic Score (15%)]
-        Sanitizer -->|Extract Skills| Score_Key[🔑 Keyword Match (25%)]
-        Sanitizer -->|Calc Experience| Score_Exp[⏳ Experience Score (20%)]
-        Sanitizer -->|Check Degree| Score_Edu[🎓 Education Score (10%)]
-        Sanitizer -->|Analyze Layout| Score_Vis[🎨 Visual Score (30%)]
+        Vectorizers -->|Cosine Sim| Score_Sem["📐 Semantic Score (15%)"]
+        Sanitizer -->|Extract Skills| Score_Key["🔑 Keyword Match (25%)"]
+        Sanitizer -->|Calc Experience| Score_Exp["⏳ Experience Score (20%)"]
+        Sanitizer -->|Check Degree| Score_Edu["🎓 Education Score (10%)"]
+        Sanitizer -->|Analyze Layout| Score_Vis["🎨 Visual Score (30%)"]
         
-        Score_Sem & Score_Key & Score_Exp & Score_Edu & Score_Vis -->|Sum| Total_Score[🧮 Hybrid Fit Score]
+        Score_Sem & Score_Key & Score_Exp & Score_Edu & Score_Vis -->|Sum| Total_Score["🧮 Hybrid Fit Score"]
         
-        Total_Score -->|Sort Descending| Ranking[📊 Candidate Ranking]
+        Total_Score -->|Sort Descending| Ranking["📊 Candidate Ranking"]
         
-        Ranking -->|Top N + 5| AI_Deep[🧠 GPT-4o Deep Read]
-        AI_Deep -->|Analyze Gaps & Red Flags| Reasoning[💡 AI Critique]
+        Ranking -->|Top N + 5| AI_Deep["🧠 GPT-4o Deep Read"]
+        AI_Deep -->|Analyze Gaps & Red Flags| Reasoning["💡 AI Critique"]
         
-        Reasoning -->|Final Cutoff| Selection{🏆 Is Selected?}
+        Reasoning -->|Final Cutoff| Selection{"🏆 Is Selected?"}
     end
 
     %% ---------------------------------------------------------
     %% PHASE 4: AUTOMATED ACTION & EVALUATION
     %% ---------------------------------------------------------
     subgraph "Phase 4: Optimization & Outreach"
-        Selection -->|No| Soft_Rej[🟡 Not Selected List]
-        Soft_Rej -->|Trigger| Email_Rej[📧 Send Rejection Email]
+        Selection -->|No| Soft_Rej["🟡 Not Selected List"]
+        Soft_Rej -->|Trigger| Email_Rej["📧 Send Rejection Email"]
         
-        Selection -->|Yes| Shortlist[🟢 Shortlisted]
-        Shortlist -->|Trigger| Email_Invite[📧 Send Test Invite]
+        Selection -->|Yes| Shortlist["🟢 Shortlisted"]
+        Shortlist -->|Trigger| Email_Invite["📧 Send Test Invite"]
         
-        Email_Invite -->|Link Click| Candidate[👤 Candidate Portal]
+        Email_Invite -->|Link Click| Candidate["👤 Candidate Portal"]
         Test_JSON -.-> Candidate
         
-        Candidate -->|Submit Test| Auto_Grader[🤖 AI Auto-Grader]
-        Auto_Grader -->|Eval Code Complexity| Code_Score[💻 Code Score]
-        Auto_Grader -->|Check Answer Key| MCQ_Score[📝 MCQ Score]
+        Candidate -->|Submit Test| Auto_Grader["🤖 AI Auto-Grader"]
+        Auto_Grader -->|Eval Code Complexity| Code_Score["💻 Code Score"]
+        Auto_Grader -->|Check Answer Key| MCQ_Score["📝 MCQ Score"]
         
-        Code_Score & MCQ_Score & Reasoning -->|Compile| Final_Report[🎖️ FINAL HIRING DOSSIER]
+        Code_Score & MCQ_Score & Reasoning -->|Compile| Final_Report["🎖️ FINAL HIRING DOSSIER"]
     end
 ```
 
