@@ -1,13 +1,13 @@
 import os
 import json
-from groq import Groq
+from openai import OpenAI
 from dotenv import load_dotenv
 
 # Load environment variables
 basedir = os.path.abspath(os.path.dirname(__file__))
 load_dotenv(os.path.join(basedir, "../../.env"))
 
-client = Groq(api_key=os.getenv("GROQ_API_KEY"))
+client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
 def generate_aptitude_questions(jd_text: str):
     """
@@ -54,9 +54,9 @@ def generate_aptitude_questions(jd_text: str):
 
     print(f"\n--- 🚀 AGENT START: Analysing Job Description ---")
     try:
-        print(f"Step 1: Connecting to Groq AI (Llama-3.3-70b)...")
+        print(f"Step 1: Connecting to OpenAI (GPT-4o)...")
         completion = client.chat.completions.create(
-            model="llama-3.3-70b-versatile",
+            model="gpt-4o",
             messages=[
                 {"role": "system", "content": "You are a JSON-only generator. You honeslty follow the requested schema and never omit fields."},
                 {"role": "user", "content": prompt}

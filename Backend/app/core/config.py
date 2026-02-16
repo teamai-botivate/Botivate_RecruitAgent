@@ -56,7 +56,7 @@ class Settings(BaseSettings):
     openai_api_key: str = os.getenv("OPENAI_API_KEY", "")
 
     # Models (override default)
-    llm_model: str = "llama-3.3-70b-versatile"
+    llm_model: str = "gpt-4o"
 
 
     class Config:

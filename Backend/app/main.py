@@ -294,7 +294,7 @@ async def _run_async_analysis(job_id: str, jd_text: str, source_dir: str, top_n:
                     email_subject=candidate.get('email_subject', ''),
                     email_body=candidate.get('email_body', ''),
                     resume_text=candidate['text'],
-                    threshold=0.6,  # Zero-shot classification threshold (higher = stricter)
+                    threshold=0.45,  # Lowered threshold to catch more candidates (0.6 -> 0.45)
                     jd_title_embedding=jd_title_vector # PASS PRE-COMPUTED VECTOR
                 )
             except Exception as e:

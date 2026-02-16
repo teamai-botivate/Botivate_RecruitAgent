@@ -1,11 +1,11 @@
 import os
-from groq import Groq
+from openai import OpenAI
 from dotenv import load_dotenv
 # Load environment variables
 basedir = os.path.abspath(os.path.dirname(__file__))
 load_dotenv(os.path.join(basedir, "../../.env"))
 
-client = Groq(api_key=os.getenv("GROQ_API_KEY"))
+client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
 async def generate_jd_ai(data: dict):
     """
@@ -37,7 +37,7 @@ async def generate_jd_ai(data: dict):
     INTELLIGENT ANALYSIS REQUIREMENTS
     ----------------------------
     - Analyze the role and industry carefully.
-    - Automatically determine required Key Skills and modern Tech Stack based on market standards.
+    - Automatically determine all the required Key Skills and modern Tech Stack based on market standards.
     - Do NOT rely on pre-provided skills (infer them from the role title and industry).
     - Adjust responsibilities and tools based on experience level ({data['experience']}).
     - Mention the salary of {data['salary']} LPA clearly as the first point in the compensation section.
@@ -60,13 +60,14 @@ async def generate_jd_ai(data: dict):
     - YOU MUST INCLUDE THE SALARY OF {data['salary']} LPA IN SECTION 8.
     - Keep it concise (under 250 words total).
     - Use professional, punchy language.
+    - MIMITIC KEYWORD DENSITY: Ensure the 'Required Skills' and 'Tech Stack' sections are keyword-rich (like a Groq/Llama generation) to help with ATS parsing.
     - Maintain the numbered structure (1-9).
     - Response should only contain the JD text.
     """
 
     try:
         completion = client.chat.completions.create(
-            model="llama-3.3-70b-versatile",
+            model="gpt-4o",
             messages=[
                 {"role": "system", "content": "You are a professional JD writer robot."},
                 {"role": "user", "content": prompt}
