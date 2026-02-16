@@ -145,8 +145,32 @@ async def _run_async_analysis(job_id: str, jd_text: str, source_dir: str, top_n:
 
                 if not extracted_email:
                     # Fallback to Regex on text
-                    email_match = re.search(r'[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}', text)
-                    extracted_email = email_match.group(0) if email_match else ""
+                    # Clean garbled icon text that PDF extractors produce from icon glyphs
+                    # e.g. ✉ icon → "envelpe", 📞 → "phone", etc.
+                    cleaned_for_email = re.sub(
+                        r'(?:envelpe|envelope|envel|envlp|phone|linkedinlinkedin|githubgithub|ὑ7)',
+                        ' ',
+                        text,
+                        flags=re.IGNORECASE
+                    )
+                    email_match = re.search(r'[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}', cleaned_for_email)
+                    if email_match:
+                        raw_email = email_match.group(0)
+                        # Extra safety: strip any prefix that isn't valid email chars
+                        # Valid email local part starts with alphanumeric
+                        # Remove leading chars that look like icon remnants (e.g., "pe")
+                        at_pos = raw_email.find('@')
+                        if at_pos > 0:
+                            local_part = raw_email[:at_pos]
+                            domain_part = raw_email[at_pos:]
+                            # If local part starts with "pe" followed by a likely real name,
+                            # and original text has "envelpe" pattern, strip "pe"
+                            if re.search(r'envelpe\s*' + re.escape(raw_email), text, re.IGNORECASE):
+                                local_part = local_part[2:]  # Strip "pe" prefix
+                                raw_email = local_part + domain_part
+                        extracted_email = raw_email
+                    else:
+                        extracted_email = ""
                 
                 # DEBUG LOG
                 print(f"   🕵️ DEBUG: Extracted Email for {fname}: '{extracted_email}'")

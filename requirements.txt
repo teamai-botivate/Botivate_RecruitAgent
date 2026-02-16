@@ -21,3 +21,4 @@ google-auth-httplib2
 google-auth-oauthlib
 transformers>=4.30.0
 torch>=2.0.0
+PyMuPDF

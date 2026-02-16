@@ -67,7 +67,10 @@ class PDFService:
         Extracts both visible text and hidden mailto: links.
         Returns the first valid email found, or empty string.
         """
-        import fitz
+        try:
+            import pymupdf as fitz
+        except ImportError:
+            import fitz
         import re
         
         found_emails = [] # Use list to preserve order of appearance (usually better than set)

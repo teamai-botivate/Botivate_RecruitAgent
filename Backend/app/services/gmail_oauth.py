@@ -31,12 +31,10 @@ class GmailOAuthService:
         # Create token directory if it doesn't exist
         self.token_dir.mkdir(exist_ok=True)
         
-        # Verify client_secret.json exists
+        # Verify client_secret.json exists (Warn instead of crash at startup)
         if not self.client_secret_path.exists():
-            raise FileNotFoundError(
-                f"client_secret.json not found at {self.client_secret_path}. "
-                "Please download it from Google Cloud Console."
-            )
+            print(f"⚠️  WARNING: client_secret.json not found at {self.client_secret_path}")
+            print("   Gmail integration will be disabled. Download it from Google Cloud Console to enable.")
     
     def get_authorization_url(self, company_id: str, redirect_uri: str) -> tuple[str, str]:
         """

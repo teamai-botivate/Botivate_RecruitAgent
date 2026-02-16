@@ -1,4 +1,3 @@
-
 const analyzeBtn = document.getElementById('analyze-btn');
 const topNInput = document.getElementById('top-n-input');
 const jdDrop = document.getElementById('jd-drop');
@@ -9,28 +8,15 @@ let resumeFiles = [];
 let lastAnalysisData = null;
 let currentReportPath = "";
 
-// --- Initialization & Stepper Logic ---
+// --- Initialization ---
 document.addEventListener('DOMContentLoaded', () => {
     lucide.createIcons();
     // Load JD from Generator if present
     const savedJD = localStorage.getItem('recruiter_generated_jd');
     if (savedJD) {
         document.getElementById('jd-text').value = savedJD;
-        // Trigger update stepper
-        updateStepper(2);
     }
 });
-
-function updateStepper(stepNumber) {
-    document.querySelectorAll('.workflow-stepper .step').forEach(step => {
-        const stepVal = parseInt(step.dataset.step);
-        if (stepVal <= stepNumber) {
-            step.classList.add('active');
-        } else {
-            step.classList.remove('active');
-        }
-    });
-}
 
 // --- Drag & Drop Handlers ---
 function setupDrop(dropArea, callback) {
@@ -57,7 +43,10 @@ function setupDrop(dropArea, callback) {
     });
 
     dropArea.addEventListener('click', (e) => {
-        if (['TEXTAREA', 'LABEL', 'INPUT'].includes(e.target.tagName)) return;
+        // Don't interfere with textarea or direct input clicks
+        if (['TEXTAREA', 'INPUT'].includes(e.target.tagName)) return;
+        // If click is inside a label with a `for` attribute, let the browser handle it natively
+        if (e.target.closest('label[for]')) return;
         dropArea.querySelector('input[type="file"]').click();
     });
 
@@ -384,17 +373,42 @@ function renderResults(data) {
 
 
 // Simplified: Show All Analyzed Candidates (Sorted by Score)
-function renderAnalysisContent(filter) {
+function renderAnalysisContent() {
     const container = document.getElementById('analysis-dynamic-content');
-    container.innerHTML = '';
+    container.innerHTML = ''; // definitive clear
 
-    // Use MAIN candidates list (Already Sorted by Final Score!)
-    // Filter only those that have AI reasoning
-    const analysis = lastAnalysisData.candidates.filter(c => c.reasoning);
+    let topN = parseInt(topNInput.value);
+    if (isNaN(topN) || topN < 1) topN = 5; // Fallback to 5 if input invalid
 
-    analysis.forEach((item, idx) => {
-        // Render all cards. If status is "Rejected", it will show red badge.
-        renderCandidateCard(item, container, idx, (item.status || "").toLowerCase().includes("reject"));
+    // 1. Get List
+    let candidates = lastAnalysisData.candidates || [];
+
+    // 2. Strict Slice: Only consider the first Top N (as defined by backend logic)
+    // The backend guarantees sorted order: 0..N-1 are the "Selected" set.
+    let selected = candidates.slice(0, topN);
+
+    // 3. Status Filter: Hide anyone explicitly marked as "Not Selected" or "Rejected"
+    // This handles edge cases where the slice includes someone the backend flagged for rejection (e.g. strict rule failure)
+    selected = selected.filter(item => {
+        const s = (item.status || "").toLowerCase();
+        return !s.includes("not selected") && !s.includes("rejected");
+    });
+
+    if (selected.length === 0) {
+        container.innerHTML = `
+            <div style="text-align: center; padding: 40px; color: #6b7280;">
+                <p>No qualified candidates found in the top ${topN} selection.</p>
+            </div>
+        `;
+        return;
+    }
+
+    selected.forEach((item, idx) => {
+        // Double check status before rendering (Redundant but safe)
+        const s = (item.status || "").toLowerCase();
+        if (s.includes("not selected")) return;
+
+        renderCandidateCard(item, container, idx, false);
     });
 }
 

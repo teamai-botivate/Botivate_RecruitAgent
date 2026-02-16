@@ -25,9 +25,9 @@
             </div>
             <div class="nav-links">
                 <div class="workflow-stepper">
-                    <div class="step active" data-step="1">Resume Screening</div>
-                    <a href="/jd-tools/index.html" class="step" data-step="2">JD Generator</a>
-                    <a href="/aptitude/index.html" class="step" data-step="3">Aptitude generator</a>
+                    <a href="/jd-tools/index.html" class="step" data-step="1">JD Generator</a>
+                    <a href="/index.html" class="step active" data-step="2">Resume Screening</a>
+                    <a href="/aptitude/index.html" class="step" data-step="3">Aptitude Generator</a>
                 </div>
             </div>
             <div class="nav-actions">
@@ -57,7 +57,7 @@
                     <div class="drop-zone glass-inset" id="jd-drop">
                         <textarea id="jd-text" placeholder="Paste your JD here..." rows="6"></textarea>
                         <div class="drop-divider"><span>OR</span></div>
-                        <label for="jd-file-input" class="file-upload-label glass-btn">
+                        <label for="jd-file" class="file-upload-label glass-btn">
                             <span class="icon"><i data-lucide="upload"></i></span> Upload PDF/TXT
                         </label>
                         <input type="file" id="jd-file" class="hidden" accept=".pdf,.txt">
@@ -75,7 +75,7 @@
                         <div class="drop-zone glass-inset" id="resume-drop">
                             <div class="upload-icon"><i data-lucide="inbox"></i></div>
                             <p>Drag & drop resumes here</p>
-                            <label for="resume-files-input" class="file-upload-label glass-btn">
+                            <label for="resume-files" class="file-upload-label glass-btn">
                                 <span class="icon"><i data-lucide="plus-circle"></i></span> Select Files
                             </label>
                             <input type="file" id="resume-files" class="hidden" multiple accept=".pdf,.txt">
@@ -268,7 +268,7 @@
         </div>
     </div>
 
-    <script src="script.js?v=7"></script>
+    <script src="script.js?v=10"></script>
 </body>
 
 </html>

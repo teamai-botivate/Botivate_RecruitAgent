@@ -33,16 +33,29 @@ body {
 .blur-2 { bottom: -10%; right: -10%; background: var(--secondary); }
 .blur-3 { top: 40%; left: 40%; background: var(--accent); opacity: 0.05; }
 
-/* Navbar */
+/* Navbar Styles - Unified */
 .navbar {
-    position: fixed; top: 0; left: 0; width: 100%; height: 70px;
-    z-index: 1000; display: flex; align-items: center; padding: 0 40px;
-    background: rgba(255, 255, 255, 0.8); backdrop-filter: blur(15px);
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 70px;
+    z-index: 1000;
+    display: flex;
+    align-items: center;
+    padding: 0 40px;
+    background: rgba(255, 255, 255, 0.8);
+    backdrop-filter: blur(15px);
     border-bottom: 1px solid rgba(0,0,0,0.05);
 }
-.nav-container { display: flex; justify-content: space-between; align-items: center; width: 100%; position: relative; }
-.logo { display: flex; align-items: center; gap: 10px; font-weight: 800; font-size: 1.5rem; }
-.logo-text { background: linear-gradient(135deg, var(--primary), var(--secondary)); -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent; }
+
+.nav-container {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    width: 100%;
+    position: relative;
+}
 
 .nav-links {
     position: absolute;
@@ -50,11 +63,59 @@ body {
     transform: translateX(-50%);
 }
 
-.workflow-stepper { display: flex; gap: 30px; }
-.step { font-size: 0.95rem; font-weight: 600; color: var(--text-muted); padding: 10px 5px; cursor: pointer; text-decoration: none; position: relative; opacity: 0.6; transition: all 0.3s ease; }
-.step.active { opacity: 1; color: var(--primary); }
-.step::after { content: ''; position: absolute; bottom: 0; left: 0; width: 100%; height: 3px; background: var(--primary); border-radius: 4px; transform: scaleX(0); transition: transform 0.3s cubic-bezier(0.19, 1, 0.22, 1); }
-.step.active::after { transform: scaleX(1); }
+.logo {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    font-weight: 800;
+    font-size: 1.6rem;
+    color: var(--primary);
+    text-decoration: none;
+}
+
+.logo-text {
+    background: linear-gradient(135deg, var(--primary), var(--secondary));
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+}
+
+.workflow-stepper {
+    display: flex;
+    gap: 0;
+    background: rgba(0, 0, 0, 0.03);
+    padding: 6px;
+    border-radius: 40px;
+    border: 1px solid rgba(0, 0, 0, 0.05);
+}
+
+.step {
+    font-size: 0.85rem;
+    font-weight: 700;
+    color: var(--text-muted);
+    padding: 10px 24px;
+    cursor: pointer;
+    text-decoration: none;
+    border-radius: 30px;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    opacity: 0.6;
+    display: flex;
+    align-items: center;
+    white-space: nowrap;
+}
+
+.step.active {
+    opacity: 1;
+    background: white;
+    color: var(--primary);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+}
+
+.step:not(.active):hover {
+    opacity: 0.9;
+    background: rgba(255, 255, 255, 0.6);
+    color: var(--primary);
+}
 
 /* Content Section */
 .content-wrapper { padding-top: 120px; padding-bottom: 60px; width: 95%; max-width: var(--container-max); margin: 0 auto; }
