@@ -675,6 +675,46 @@ textarea::placeholder {
     font-weight: 700;
 }
 
+/* Reject & Create Test Button */
+.reject-test-btn {
+    background: linear-gradient(135deg, hsl(0, 72%, 55%), hsl(0, 80%, 45%));
+    color: white;
+    padding: 12px 24px;
+    border-radius: 30px;
+    border: none;
+    font-family: inherit;
+    font-weight: 700;
+    font-size: 0.85rem;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    cursor: pointer;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    box-shadow: 0 4px 15px rgba(220, 38, 38, 0.25);
+    white-space: nowrap;
+}
+
+.reject-test-btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 25px rgba(220, 38, 38, 0.35);
+    background: linear-gradient(135deg, hsl(0, 80%, 50%), hsl(0, 85%, 40%));
+}
+
+.reject-test-btn:active {
+    transform: translateY(0);
+    box-shadow: 0 2px 10px rgba(220, 38, 38, 0.25);
+}
+
+.reject-test-btn .icon {
+    display: flex;
+    align-items: center;
+}
+
+.reject-test-btn svg {
+    width: 18px;
+    height: 18px;
+}
+
 /* AI Report View */
 .ai-report-wrapper {
     background: white;

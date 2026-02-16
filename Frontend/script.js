@@ -563,12 +563,15 @@ function showNotification(message, type = "info") {
 }
 
 // Open Folder Link
-document.getElementById('open-report-btn').addEventListener('click', async () => {
-    if (!currentReportPath) return;
-    const formData = new FormData();
-    formData.append('path', currentReportPath);
-    fetch('/api/open_report', { method: 'POST', body: formData });
-});
+const openReportBtn = document.getElementById('open-report-btn');
+if (openReportBtn) {
+    openReportBtn.addEventListener('click', async () => {
+        if (!currentReportPath) return;
+        const formData = new FormData();
+        formData.append('path', currentReportPath);
+        fetch('/api/open_report', { method: 'POST', body: formData });
+    });
+}
 
 // Modal Logic placeholder
 // Detailed Insight Modal
