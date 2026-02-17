@@ -231,7 +231,7 @@
             }
 
             try {
-                const res = await fetch(`http://127.0.0.1:8002/get-assessment/${token}`);
+                const res = await fetch(`/aptitude-api/get-assessment/${token}`);
                 if (!res.ok) throw new Error("Link expired or invalid.");
                 
                 assessmentData = await res.json();
@@ -450,7 +450,7 @@
             };
 
             try {
-                const res = await fetch('http://127.0.0.1:8002/submit-assessment', {
+                const res = await fetch('/aptitude-api/submit-assessment', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify(data)
