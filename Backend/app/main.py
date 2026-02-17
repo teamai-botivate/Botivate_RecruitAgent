@@ -116,6 +116,7 @@ async def _run_async_analysis(job_id: str, jd_text: str, source_dir: str, top_n:
         
         # Batch Process to prevent Memory Spikes
         update_job_progress(job_id, 15, f"Parsing {total_files} Resumes (Parallel)...")
+        await asyncio.sleep(0.01) # Yield
         
         def process_single_file(fname):
             """Worker function for parallel processing"""
@@ -213,6 +214,10 @@ async def _run_async_analysis(job_id: str, jd_text: str, source_dir: str, top_n:
                 
                 resume_texts[fname] = text
                 resume_pages[fname] = pages
+                
+                # Dynamic parsing progress (15% to 40% range)
+                parse_prog = 15 + int((idx + 1) / total_files * 25)
+                update_job_progress(job_id, parse_prog, f"Parsed {idx+1}/{total_files}: {fname}")
                 
                 logger.info(f"   📄 Parsed: {fname} ({len(text)} chars) | Pages: {pages}")
 
@@ -352,8 +357,10 @@ async def _run_async_analysis(job_id: str, jd_text: str, source_dir: str, top_n:
                 
                 # 2. Add ONLY new texts
                 if new_docs:
+                    update_job_progress(job_id, 45, f"Embedding {len(new_docs)} new resumes...")
                     logger.info(f"   📥 Embedding {len(new_docs)} new resumes into Vector DB...")
                     vector_service.vector_service.add_texts(new_docs, new_metas)
+                    await asyncio.sleep(0.01)
                 else:
                     logger.info("   ⏩ All resumes already in Vector DB. Skipping embedding.")
                 
@@ -435,6 +442,11 @@ async def _run_async_analysis(job_id: str, jd_text: str, source_dir: str, top_n:
                     new_total = c['score']['semantic_points'] + exp_score
                     c['score']['total'] = round(min(100, new_total), 1)
                     
+                    # Update progress during scoring (50% to 65%)
+                    score_prog = 50 + int((idx + 1) / len(vector_candidates) * 15)
+                    update_job_progress(job_id, score_prog, f"Scoring: {fname}")
+                    await asyncio.sleep(0.01)
+
                     logger.info(f"   🧠 {fname} | Final: {c['score']['total']} (Sem: {final_sem_score:.2f}, Exp: {exp_score})")
                     if found_skills:
                         logger.info(f"      ✅ Semantic Found: {len(found_skills)}/{len(jd_data['keywords'])} ({', '.join(found_skills[:5])}...)")
@@ -453,7 +465,8 @@ async def _run_async_analysis(job_id: str, jd_text: str, source_dir: str, top_n:
         top_candidates = vector_candidates[:top_n]
         remaining = vector_candidates[top_n:]
 
-        update_job_progress(job_id, 75, f"Identified Top {len(top_candidates)} Candidates. Running AI Analysis...")
+        update_job_progress(job_id, 70, f"Identified Top {len(top_candidates)} Candidates. Running AI Pass...")
+        await asyncio.sleep(0.01)
 
         # 4. AI ANALYSIS (Pass 3 - The Deep Dive)
         # Smart Selection: Analyze Top N + 2 candidates (Conservative to avoid Rate Limits)
@@ -497,6 +510,10 @@ async def _run_async_analysis(job_id: str, jd_text: str, source_dir: str, top_n:
             if len(source_text) > 8000:
                 logger.warning(f"   ⚠️ Resume too long ({len(source_text)} chars). Truncating to 8000.")
                 source_text = source_text[:8000] + "\n[...Truncated...]"
+
+            # Dynamic AI Progress (70% - 95%)
+            ai_prog = 70 + int((i + 1) / len(ai_target) * 25)
+            update_job_progress(job_id, ai_prog, f"AI Analysis: {c['filename']}")
 
             anon_text = ai_service.ai_service.anonymize(source_text) 
             
@@ -596,7 +613,7 @@ async def _run_async_analysis(job_id: str, jd_text: str, source_dir: str, top_n:
                logger.warning(f"   ⚠️ Skipping AI analysis for {c['filename']} due to repeated errors. Using Base Score.")
 
             # Rate Limit Prevention Check
-            time.sleep(1.0) # Sleep 1s between requests
+            await asyncio.sleep(1.0) # NON-BLOCKING sleep 1s between requests
 
         # 4b. Apply AI Results & Bonus
         if img_analysis:
