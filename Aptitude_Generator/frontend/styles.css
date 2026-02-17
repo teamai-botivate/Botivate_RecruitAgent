@@ -1,18 +1,25 @@
 :root {
-    --primary: hsl(245, 100%, 65%);
-    --primary-dark: hsl(245, 100%, 55%);
-    --secondary: hsl(190, 100%, 45%);
-    --accent: hsl(30, 100%, 50%);
-    --success: hsl(150, 80%, 45%);
+    /* Logo-Inspired Palette */
+    --primary: #6366f1; /* Indigo */
+    --secondary: #8b5cf6; /* Violet */
+    --accent: #d946ef; /* Fuchsia */
+    --success: #10b981;
+    --danger: #ef4444;
+    --warning: #f59e0b;
     
-    --bg-light: hsl(220, 40%, 98%);
-    --text-main: hsl(220, 20%, 15%);
-    --text-muted: hsl(220, 10%, 45%);
+    --bg-light: #f8fafc;
+    --text-main: #1e293b;
+    --text-muted: #64748b;
     
     --radius-lg: 24px;
     --radius-md: 16px;
     --radius-sm: 8px;
-    --container-max: 1100px;
+    --container-max: 1200px;
+    
+    --glass-bg: rgba(255, 255, 255, 0.4);
+    --glass-border: rgba(255, 255, 255, 0.5);
+    --glass-shadow: 0 10px 40px rgba(0, 0, 0, 0.03);
+    --glass-blur: blur(15px);
     --modal-z: 3000;
 }
 
@@ -68,13 +75,25 @@ body {
     align-items: center;
     gap: 12px;
     font-weight: 800;
-    font-size: 1.6rem;
+    font-size: 1.8rem;
     color: var(--primary);
     text-decoration: none;
 }
 
+.logo-icon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 42px;
+    height: 42px;
+    background: linear-gradient(135deg, var(--primary), var(--secondary), var(--accent));
+    color: white;
+    border-radius: 12px;
+    box-shadow: 0 8px 20px rgba(139, 92, 246, 0.2);
+}
+
 .logo-text {
-    background: linear-gradient(135deg, var(--primary), var(--secondary));
+    background: linear-gradient(135deg, var(--primary), var(--secondary), var(--accent));
     -webkit-background-clip: text;
     background-clip: text;
     -webkit-text-fill-color: transparent;
@@ -106,14 +125,14 @@ body {
 
 .step.active {
     opacity: 1;
-    background: white;
-    color: var(--primary);
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+    background: linear-gradient(135deg, var(--primary), var(--secondary), var(--accent));
+    color: white;
+    box-shadow: 0 8px 20px rgba(139, 92, 246, 0.3);
 }
 
 .step:not(.active):hover {
     opacity: 0.9;
-    background: rgba(255, 255, 255, 0.6);
+    background: rgba(99, 102, 241, 0.1);
     color: var(--primary);
 }
 
@@ -121,17 +140,30 @@ body {
 .content-wrapper { padding-top: 120px; padding-bottom: 60px; width: 95%; max-width: var(--container-max); margin: 0 auto; }
 .hero-section { text-align: center; margin-bottom: 50px; }
 .hero-section h1 { font-size: 3rem; font-weight: 800; margin-bottom: 15px; }
-.gradient-text { background: linear-gradient(135deg, var(--primary), var(--secondary)); -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent; }
+.gradient-text { background: linear-gradient(135deg, var(--primary), var(--secondary), var(--accent)); -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent; }
 .subtitle { color: var(--text-muted); font-size: 1.1rem; }
 
 /* Cards */
 .main-card {
-    background: rgba(255, 255, 255, 0.7); backdrop-filter: blur(10px);
-    border: 1px solid rgba(255, 255, 255, 0.8); border-radius: var(--radius-lg);
-    padding: 40px; box-shadow: 0 20px 50px rgba(0,0,0,0.04); margin-bottom: 30px;
+    background: var(--glass-bg);
+    backdrop-filter: var(--glass-blur);
+    border: 1px solid var(--glass-border);
+    border-radius: var(--radius-lg);
+    padding: 40px; box-shadow: var(--glass-shadow); margin-bottom: 30px;
 }
 
-.section-badge { display: inline-block; padding: 5px 15px; background: var(--primary); color: white; border-radius: 20px; font-size: 0.75rem; font-weight: 700; text-transform: uppercase; margin-bottom: 15px; }
+.section-badge { 
+    display: inline-block; 
+    padding: 5px 15px; 
+    background: linear-gradient(135deg, var(--primary), var(--secondary), var(--accent)); 
+    color: white; 
+    border-radius: 20px; 
+    font-size: 0.75rem; 
+    font-weight: 700; 
+    text-transform: uppercase; 
+    margin-bottom: 15px; 
+    box-shadow: 0 4px 12px rgba(139, 92, 246, 0.3);
+}
 .section-title { font-size: 1.4rem; font-weight: 700; color: var(--text-main); margin-bottom: 25px; }
 
 /* Inputs */
@@ -225,11 +257,27 @@ textarea:focus { outline: none; border-color: var(--primary); box-shadow: 0 0 0 
 /* Buttons */
 .action-footer { display: flex; justify-content: center; }
 .primary-btn {
-    background: var(--text-main); color: white; padding: 18px 45px;
-    border-radius: 40px; border: none; font-weight: 600; font-size: 1.1rem;
-    display: flex; align-items: center; gap: 12px; cursor: pointer; transition: 0.3s;
+    background: linear-gradient(135deg, var(--primary), var(--secondary), var(--accent)) !important;
+    color: white !important;
+    padding: 18px 45px;
+    border-radius: 40px;
+    border: none;
+    font-weight: 800;
+    font-size: 1.1rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    cursor: pointer;
+    transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    box-shadow: 0 10px 30px -5px rgba(139, 92, 246, 0.4);
 }
-.primary-btn:hover { background: var(--primary); transform: translateY(-3px); box-shadow: 0 10px 30px rgba(124, 58, 237, 0.3); }
+
+.primary-btn:hover {
+    transform: translateY(-3px) scale(1.02);
+    box-shadow: 0 20px 40px -10px rgba(139, 92, 246, 0.5);
+    filter: brightness(1.1);
+}
 
 .secondary-btn-large {
     background: var(--success); color: white; padding: 15px 35px;
@@ -613,3 +661,21 @@ textarea:focus { outline: none; border-color: var(--primary); box-shadow: 0 0 0 
 /* Override old checkbox style */
 .q-checkbox-wrapper { display: flex; align-items: flex-start; }
 .q-checkbox { display: none; } /* Hide the old placeholder */
+
+/* --- Footer --- */
+footer {
+    text-align: center;
+    padding: 60px 20px 40px;
+    color: var(--text-muted);
+    font-size: 0.9rem;
+    font-weight: 500;
+    letter-spacing: 0.5px;
+}
+
+.footer-brand {
+    background: linear-gradient(135deg, var(--primary), var(--secondary), var(--accent));
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+    font-weight: 800;
+}

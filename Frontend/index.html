@@ -1,261 +1,356 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
-
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>RecruitAI | Next-Gen AI ATS</title>
-    <link rel="stylesheet" href="styles.css">
-    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&display=swap"
-        rel="stylesheet">
+    <link rel="stylesheet" href="styles.css?v=2.0">
+    <link
+      href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&display=swap"
+      rel="stylesheet"
+    />
     <script src="https://unpkg.com/lucide@latest"></script>
-</head>
+  </head>
 
-<body class="light-theme">
+  <body class="light-theme">
     <!-- Decorative background elements -->
     <div class="bg-blur blur-1"></div>
     <div class="bg-blur blur-2"></div>
     <div class="bg-blur blur-3"></div>
 
     <nav class="navbar glass">
-        <div class="nav-container">
-            <div class="logo">
-                <span class="logo-icon"><i data-lucide="dna"></i></span>
-                <span class="logo-text">RecruitAI</span>
-            </div>
-            <div class="nav-links">
-                <div class="workflow-stepper">
-                    <a href="/jd-tools/index.html" class="step" data-step="1">JD Generator</a>
-                    <a href="/index.html" class="step active" data-step="2">Resume Screening</a>
-                    <a href="/aptitude/index.html" class="step" data-step="3">Aptitude Generator</a>
-                </div>
-            </div>
-            <div class="nav-actions">
-                <div class="shortlist-config glass-btn">
-                    <label>Top</label>
-                    <input type="number" id="top-n-input" value="5" min="1" max="50">
-                    <label>Candidates</label>
-                </div>
-            </div>
+      <div class="nav-container">
+        <div class="logo">
+          <span class="logo-icon"><i data-lucide="users"></i></span>
+          <span class="logo-text">Botivate RecruitAgent</span>
         </div>
+        <div class="nav-links">
+          <div class="workflow-stepper">
+            <a href="/jd-tools/index.html" class="step" data-step="1"
+              >JD Generator</a
+            >
+            <a href="/index.html" class="step active" data-step="2"
+              >Resume Screening</a
+            >
+            <a href="/aptitude/index.html" class="step" data-step="3"
+              >Aptitude Generator</a
+            >
+          </div>
+        </div>
+        <div class="nav-actions">
+        </div>
+      </div>
     </nav>
 
     <main class="content-wrapper">
-        <header class="hero-section">
-            <h1 class="animate-text">Smart Screening <span class="gradient-text">Redefined</span></h1>
-            <p class="subtitle animate-fade-in">Leverage Llama 3.3 to find your perfect match in seconds.</p>
-        </header>
+      <header class="hero-section">
+        <h1 class="animate-text">
+          Next-Gen <span class="gradient-text">Agentic ATS</span>
+        </h1>
+        <p class="subtitle animate-fade-in">
+          Powered by Botivate for Precision Talent Extraction.
+        </p>
+      </header>
 
-        <section class="main-card glass animate-slide-up">
-            <div class="config-grid">
-                <!-- JD Section -->
-                <div class="input-card">
-                    <div class="card-header">
-                        <span class="card-icon"><i data-lucide="file-text"></i></span>
-                        <h3>Job Description</h3>
-                    </div>
-                    <div class="drop-zone glass-inset" id="jd-drop">
-                        <textarea id="jd-text" placeholder="Paste your JD here..." rows="6"></textarea>
-                        <div class="drop-divider"><span>OR</span></div>
-                        <label for="jd-file" class="file-upload-label glass-btn">
-                            <span class="icon"><i data-lucide="upload"></i></span> Upload PDF/TXT
-                        </label>
-                        <input type="file" id="jd-file" class="hidden" accept=".pdf,.txt">
-                        <div id="jd-name" class="file-status">No file chosen</div>
-                    </div>
+      <section class="main-card glass animate-slide-up">
+        <div class="card-header-row">
+          <div class="header-col">
+            <h3 class="row-title">Job Description</h3>
+          </div>
+          <div class="header-col flex-between">
+            <h3 class="row-title">Candidates</h3>
+            <div class="shortlist-config glass-btn">
+              <label>Top</label>
+              <input type="number" id="top-n-input" value="5" min="1" max="50" />
+              <label>Candidates</label>
+            </div>
+          </div>
+        </div>
+        <div class="config-grid">
+          <!-- JD Section -->
+          <div class="input-card">
+            <div class="drop-zone glass-inset" id="jd-drop">
+              <textarea
+                id="jd-text"
+                placeholder="Paste your JD here..."
+                rows="6"
+              ></textarea>
+              <div class="drop-divider"><span>OR</span></div>
+              <label for="jd-file" class="file-upload-label glass-btn">
+                <span class="icon"><i data-lucide="upload"></i></span> Upload
+                PDF/TXT
+              </label>
+              <input
+                type="file"
+                id="jd-file"
+                class="hidden"
+                accept=".pdf,.txt"
+              />
+              <div id="jd-name" class="file-status">No file chosen</div>
+            </div>
+          </div>
+
+          <!-- Resumes Section -->
+          <div class="input-card">
+            <div class="resume-source-container">
+              <div class="drop-zone glass-inset" id="resume-drop">
+                <div class="upload-icon"><i data-lucide="inbox"></i></div>
+                <p>Drag & drop resumes here</p>
+                <label for="resume-files" class="file-upload-label glass-btn">
+                  <span class="icon"><i data-lucide="plus-circle"></i></span>
+                  Select Files
+                </label>
+                <input
+                  type="file"
+                  id="resume-files"
+                  class="hidden"
+                  multiple
+                  accept=".pdf,.txt"
+                />
+                <div id="resume-count" class="file-status">
+                  0 candidates loaded
+                </div>
+              </div>
+
+              <div class="gmail-integration glass-inset">
+                <label class="gmail-toggle">
+                  <input type="checkbox" id="gmail-checkbox" />
+                  <span class="slider"></span>
+                  <span class="label-text"
+                    >Enable Gmail Sync <i data-lucide="mail"></i
+                  ></span>
+                </label>
+
+                <!-- Gmail OAuth Connection -->
+                <div
+                  id="gmail-connection"
+                  class="gmail-connection-status hidden"
+                >
+                  <div class="status-badge" id="gmail-status-badge">
+                    <span id="gmail-status-icon">🔗</span>
+                    <span id="gmail-status-text">Not Connected</span>
+                  </div>
+                  <button
+                    type="button"
+                    id="connect-gmail-btn"
+                    class="glass-btn gmail-connect-btn"
+                  >
+                    Connect Gmail
+                  </button>
                 </div>
 
-                <!-- Resumes Section -->
-                <div class="input-card">
-                    <div class="card-header">
-                        <span class="card-icon"><i data-lucide="users"></i></span>
-                        <h3>Candidates</h3>
+                <div id="gmail-inputs" class="gmail-date-picker hidden">
+                  <div class="date-group">
+                    <div class="input-field">
+                      <label>From</label>
+                      <input type="date" id="start-date" />
                     </div>
-                    <div class="resume-source-container">
-                        <div class="drop-zone glass-inset" id="resume-drop">
-                            <div class="upload-icon"><i data-lucide="inbox"></i></div>
-                            <p>Drag & drop resumes here</p>
-                            <label for="resume-files" class="file-upload-label glass-btn">
-                                <span class="icon"><i data-lucide="plus-circle"></i></span> Select Files
-                            </label>
-                            <input type="file" id="resume-files" class="hidden" multiple accept=".pdf,.txt">
-                            <div id="resume-count" class="file-status">0 candidates loaded</div>
-                        </div>
-
-                        <div class="gmail-integration glass-inset">
-                            <label class="gmail-toggle">
-                                <input type="checkbox" id="gmail-checkbox">
-                                <span class="slider"></span>
-                                <span class="label-text">Enable Gmail Sync <i data-lucide="mail"></i></span>
-                            </label>
-
-                            <!-- Gmail OAuth Connection -->
-                            <div id="gmail-connection" class="gmail-connection-status hidden">
-                                <div class="status-badge" id="gmail-status-badge">
-                                    <span id="gmail-status-icon">🔗</span>
-                                    <span id="gmail-status-text">Not Connected</span>
-                                </div>
-                                <button type="button" id="connect-gmail-btn" class="glass-btn gmail-connect-btn">
-                                    Connect Gmail
-                                </button>
-                            </div>
-
-                            <div id="gmail-inputs" class="gmail-date-picker hidden">
-                                <div class="date-group">
-                                    <div class="input-field">
-                                        <label>From</label>
-                                        <input type="date" id="start-date">
-                                    </div>
-                                    <div class="input-field">
-                                        <label>To</label>
-                                        <input type="date" id="end-date">
-                                    </div>
-                                </div>
-                                <p class="helper-text">AI will filter your inbox for potential resumes.</p>
-                            </div>
-                        </div>
+                    <div class="input-field">
+                      <label>To</label>
+                      <input type="date" id="end-date" />
                     </div>
+                  </div>
+                  <p class="helper-text">
+                    AI will filter your inbox for potential resumes.
+                  </p>
                 </div>
+              </div>
             </div>
-
-            <div class="action-footer">
-                <button id="analyze-btn" class="primary-btn pulse-on-hover">
-                    <span>Initiate AI Screening</span>
-                    <span class="btn-icon"><i data-lucide="rocket"></i></span>
-                </button>
-            </div>
-        </section>
-
-        <!-- Loading State -->
-        <div id="loader" class="loader-overlay hidden">
-            <div class="loader-content glass">
-                <div class="ai-spinner">
-                    <div class="orb"></div>
-                    <div class="orb"></div>
-                    <div class="orb"></div>
-                </div>
-                <h3>Synchronizing Neural Weights...</h3>
-                <p>Analyzing candidate profiles against JD constraints.</p>
-            </div>
+          </div>
         </div>
 
-        <!-- Results Section -->
-        <section id="results-area" class="results-container hidden">
-            <div class="results-header glass">
-                <div class="results-tabs">
-                    <button class="tab-btn active" onclick="switchTab('report')">
-                        <span class="icon"><i data-lucide="bot"></i></span> AI Analysis
-                    </button>
-                </div>
-                <button id="reject-proceed-btn" class="reject-test-btn">
-                    <span class="icon"><i data-lucide="mail-warning"></i></span> Reject & Create Test
-                </button>
-            </div>
+        <div class="action-footer">
+          <button id="analyze-btn" class="primary-btn pulse-on-hover">
+            <span>Initiate AI Screening</span>
+            <span class="btn-icon"><i data-lucide="rocket"></i></span>
+          </button>
+        </div>
+      </section>
 
-
-            <div id="report-view" class="tab-pane active animate-fade-in">
-                <div class="ai-report-wrapper">
-                    <header class="report-header">
-                        <h2>Predictive Talent Insights</h2>
-                        <!-- Filter Pills Removed -->
-                    </header>
-                    <div id="ai-report-content" class="staggered-grid">
-                        <!-- Cards injected here -->
-                    </div>
-                    <div id="analysis-dynamic-content" class="candidate-grid"></div>
-                </div>
+      <!-- Loading State -->
+      <div id="loader" class="loader-overlay hidden">
+        <div class="loader-content glass">
+          <div class="ai-processing-header">
+            <div class="neural-core">
+              <div class="core-pulse"></div>
+              <i data-lucide="brain"></i>
             </div>
-
-            <div id="table-view" class="tab-pane animate-fade-in">
-                <div class="table-card glass">
-                    <table class="modern-table">
-                        <thead>
-                            <tr>
-                                <th>Expert</th>
-                                <th>Match Score</th>
-                                <th>Keywords</th>
-                                <th>Exp.</th>
-                                <th>Insights</th>
-                            </tr>
-                        </thead>
-                        <tbody id="results-body">
-                            <!-- Rows injected via JS -->
-                        </tbody>
-                    </table>
-                </div>
+            <h3>AI Engine in Motion</h3>
+            <p id="loader-status">Initializing neural parameters...</p>
+          </div>
+          
+          <div class="process-steps">
+            <div class="process-step active" id="step-parsing">
+              <div class="step-icon"><i data-lucide="files"></i></div>
+              <span>Parsing</span>
             </div>
-
-            <div id="notselected-view" class="tab-pane animate-fade-in">
-                <div class="ai-report-wrapper">
-                    <header class="report-header">
-                        <h2>Not Selected Candidates</h2>
-                        <p style="opacity: 0.7; font-size: 14px;">Valid applicants who didn't make the final cut</p>
-                    </header>
-                    <div id="notselected-content" class="candidate-grid">
-                        <!-- Cards injected here -->
-                    </div>
-                </div>
+            <div class="step-line"></div>
+            <div class="process-step" id="step-analyzing">
+              <div class="step-icon"><i data-lucide="search"></i></div>
+              <span>Analyzing</span>
             </div>
-        </section>
+            <div class="step-line"></div>
+            <div class="process-step" id="step-scoring">
+              <div class="step-icon"><i data-lucide="award"></i></div>
+              <span>Scoring</span>
+            </div>
+            <div class="step-line"></div>
+            <div class="process-step" id="step-finalizing">
+              <div class="step-icon"><i data-lucide="check-circle"></i></div>
+              <span>Finalizing</span>
+            </div>
+          </div>
+          
+          <div class="progress-container">
+            <div class="progress-bar" id="poll-progress-bar"></div>
+          </div>
+          <div class="progress-percentage" id="poll-progress-text">0%</div>
+        </div>
+      </div>
+
+      <!-- Results Section -->
+      <section id="results-area" class="results-container hidden">
+        <div class="results-header glass">
+          <div class="results-tabs">
+            <button class="tab-btn active" onclick="switchTab('report')">
+              <span class="icon"><i data-lucide="bot"></i></span> AI Analysis
+            </button>
+          </div>
+          <button id="reject-proceed-btn" class="reject-test-btn">
+            <span class="icon"><i data-lucide="send"></i></span> Reject
+            & Create Test
+          </button>
+        </div>
+
+        <div id="report-view" class="tab-pane active animate-fade-in">
+          <div class="ai-report-wrapper">
+            <header class="report-header">
+              <h2>Predictive Talent Insights</h2>
+              <!-- Filter Pills Removed -->
+            </header>
+            <div id="ai-report-content" class="staggered-grid">
+              <!-- Cards injected here -->
+            </div>
+            <div id="analysis-dynamic-content" class="candidate-grid"></div>
+          </div>
+        </div>
+
+        <div id="table-view" class="tab-pane animate-fade-in">
+          <div class="table-card glass">
+            <table class="modern-table">
+              <thead>
+                <tr>
+                  <th>Expert</th>
+                  <th>Match Score</th>
+                  <th>Keywords</th>
+                  <th>Exp.</th>
+                  <th>Insights</th>
+                </tr>
+              </thead>
+              <tbody id="results-body">
+                <!-- Rows injected via JS -->
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <div id="notselected-view" class="tab-pane animate-fade-in">
+          <div class="ai-report-wrapper">
+            <header class="report-header">
+              <h2>Not Selected Candidates</h2>
+              <p style="opacity: 0.7; font-size: 14px">
+                Valid applicants who didn't make the final cut
+              </p>
+            </header>
+            <div id="notselected-content" class="candidate-grid">
+              <!-- Cards injected here -->
+            </div>
+          </div>
+        </div>
+      </section>
     </main>
 
     <!-- All Candidates Modal -->
     <div id="candidates-modal" class="modal-overlay hidden">
-        <div class="modal-content glass" style="max-width: 900px; max-height: 80vh; overflow-y: auto;">
-            <div class="modal-header">
-                <h2>All Candidates Overview</h2>
-                <button class="modal-close" onclick="closeCandidatesModal()">
-                    <i data-lucide="x"></i>
-                </button>
-            </div>
-
-            <div class="modal-body">
-                <!-- Selected Candidates Section -->
-                <div class="candidates-section">
-                    <h3 style="color: #10b981; margin-bottom: 16px;">
-                        <i data-lucide="check-circle" style="width: 20px; height: 20px;"></i>
-                        Selected Candidates
-                    </h3>
-                    <table class="modern-table" style="margin-bottom: 32px;">
-                        <thead>
-                            <tr>
-                                <th>Name</th>
-                                <th>Email</th>
-                                <th>Score</th>
-                                <th>Resume</th>
-                            </tr>
-                        </thead>
-                        <tbody id="selected-candidates-tbody">
-                            <!-- Injected via JS -->
-                        </tbody>
-                    </table>
-                </div>
-
-                <!-- Not Selected Candidates Section -->
-                <div class="candidates-section">
-                    <h3 style="color: #ef4444; margin-bottom: 16px;">
-                        <i data-lucide="x-circle" style="width: 20px; height: 20px;"></i>
-                        Not Selected Candidates
-                    </h3>
-                    <table class="modern-table">
-                        <thead>
-                            <tr>
-                                <th>Name</th>
-                                <th>Email</th>
-                                <th>Score</th>
-                                <th>Resume</th>
-                            </tr>
-                        </thead>
-                        <tbody id="notselected-candidates-tbody">
-                            <!-- Injected via JS -->
-                        </tbody>
-                    </table>
-                </div>
-            </div>
+      <div
+        class="modal-content glass"
+        style="max-width: 900px; max-height: 80vh; overflow-y: auto"
+      >
+        <div class="modal-header">
+          <h2>All Candidates Overview</h2>
+          <button class="modal-close" onclick="closeCandidatesModal()">
+            <i data-lucide="x"></i>
+          </button>
         </div>
+
+        <div class="modal-body">
+          <!-- Selected Candidates Section -->
+          <div class="candidates-section">
+            <h3 style="color: #10b981; margin-bottom: 16px">
+              <i
+                data-lucide="check-circle"
+                style="width: 20px; height: 20px"
+              ></i>
+              Selected Candidates
+            </h3>
+            <table class="modern-table" style="margin-bottom: 32px">
+              <thead>
+                <tr>
+                  <th>Name</th>
+                  <th>Email</th>
+                  <th>Score</th>
+                  <th>Resume</th>
+                </tr>
+              </thead>
+              <tbody id="selected-candidates-tbody">
+                <!-- Injected via JS -->
+              </tbody>
+            </table>
+          </div>
+
+          <!-- Not Selected Candidates Section -->
+          <div class="candidates-section">
+            <h3 style="color: #ef4444; margin-bottom: 16px">
+              <i data-lucide="x-circle" style="width: 20px; height: 20px"></i>
+              Not Selected Candidates
+            </h3>
+            <table class="modern-table">
+              <thead>
+                <tr>
+                  <th>Name</th>
+                  <th>Email</th>
+                  <th>Score</th>
+                  <th>Resume</th>
+                </tr>
+              </thead>
+              <tbody id="notselected-candidates-tbody">
+                <!-- Injected via JS -->
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
     </div>
 
-    <script src="script.js?v=11"></script>
-</body>
+    <!-- Custom Confirmation Modal -->
+    <div id="custom-modal" class="modal-overlay hidden">
+      <div class="modal-content glass confirmation-card">
+        <div id="modal-icon-container" class="modal-icon">
+          <i data-lucide="help-circle"></i>
+        </div>
+        <h3 id="modal-title">Heads Up</h3>
+        <p id="modal-message">Are you sure you want to proceed?</p>
+        <div class="modal-footer footer-actions">
+          <button id="modal-cancel-btn" class="secondary-btn glass-btn">Cancel</button>
+          <button id="modal-confirm-btn" class="primary-btn">Confirm</button>
+        </div>
+      </div>
+    </div>
 
+    <footer class="animate-fade-in">
+      <p>Powered By <span class="footer-brand">Botivate</span></p>
+    </footer>
+
+    <script src="script.js?v=12"></script>
+  </body>
 </html>

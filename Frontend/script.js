@@ -137,13 +137,20 @@ function connectGmail() {
 
 // Disconnect Gmail
 async function disconnectGmail() {
-    if (!confirm('Are you sure you want to disconnect Gmail?')) {
-        return;
-    }
+    const confirmed = await showCustomModal({
+        title: 'Disconnect Gmail',
+        message: 'Are you sure you want to disconnect Gmail? You will need to re-authenticate to sync resumes.',
+        icon: 'log-out',
+        confirmText: 'Disconnect',
+        cancelText: 'Keep Connected'
+    });
+
+    if (!confirmed) return;
 
     try {
         connectGmailBtn.disabled = true;
         connectGmailBtn.textContent = 'Disconnecting...';
+        connectGmailBtn.classList.add('loading-inline');
 
         const response = await fetch(`${API_BASE}/auth/gmail/disconnect?company_id=${COMPANY_ID}`, {
             method: 'POST'
@@ -152,14 +159,25 @@ async function disconnectGmail() {
         const data = await response.json();
 
         if (data.status === 'success') {
-            showNotification('Gmail disconnected successfully', 'success');
+            await showCustomModal({
+                title: 'Success',
+                message: 'Gmail disconnected successfully',
+                icon: 'check-circle',
+                showCancel: false
+            });
             await checkGmailConnection();
         }
     } catch (error) {
         console.error('Error disconnecting Gmail:', error);
-        showNotification('Failed to disconnect Gmail', 'error');
+        showCustomModal({
+            title: 'Error',
+            message: 'Failed to disconnect Gmail',
+            icon: 'alert-triangle',
+            showCancel: false
+        });
     } finally {
         connectGmailBtn.disabled = false;
+        connectGmailBtn.classList.remove('loading-inline');
     }
 }
 
@@ -167,7 +185,12 @@ async function disconnectGmail() {
 window.addEventListener('message', (event) => {
     if (event.data.type === 'gmail_connected') {
         console.log('Gmail connected:', event.data.email);
-        showNotification(`Gmail connected: ${event.data.email}`, 'success');
+        showCustomModal({
+            title: 'Account Connected',
+            message: `Successfully synced with ${event.data.email}`,
+            icon: 'mail',
+            showCancel: false
+        });
         checkGmailConnection();
     }
 });
@@ -217,9 +240,8 @@ analyzeBtn.addEventListener('click', async () => {
     document.getElementById('results-area').classList.add('hidden');
     analyzeBtn.disabled = true;
 
-    // Reset Loader Text
-    document.querySelector('#loader h3').textContent = "Initializing Neural Link...";
-    document.querySelector('#loader p').textContent = "Preparing analysis protocols...";
+    // Reset Loader UI
+    updateLoaderUI(0, "Initializing Neural Link...");
 
     const formData = new FormData();
     if (jdFile) formData.append('jd_file', jdFile);
@@ -252,7 +274,12 @@ analyzeBtn.addEventListener('click', async () => {
         await pollJob(jobId);
 
     } catch (error) {
-        showNotification(error.message, "error");
+        showCustomModal({
+            title: 'Analysis Error',
+            message: error.message,
+            icon: 'alert-circle',
+            showCancel: false
+        });
         document.getElementById('loader').classList.add('hidden');
         analyzeBtn.disabled = false;
     }
@@ -270,19 +297,16 @@ async function pollJob(jobId) {
             const statusData = await res.json();
 
             // Update UI
-            if (loaderTitle) loaderTitle.textContent = `Analyzing... ${statusData.progress}%`;
-            if (loaderDesc) loaderDesc.textContent = statusData.current_step || "Processing...";
+            updateLoaderUI(statusData.progress, statusData.current_step);
 
             if (statusData.status === "completed") {
                 clearInterval(pollInterval);
-                document.getElementById('loader').classList.add('hidden');
-                analyzeBtn.disabled = false;
-
-                if (statusData.result) {
-                    renderResults(statusData.result);
-                } else {
-                    showNotification("Analysis completed but no results found.", "error");
-                }
+                updateLoaderUI(100, "Analysis complete!");
+                setTimeout(() => {
+                    document.getElementById('loader').classList.add('hidden');
+                    analyzeBtn.disabled = false;
+                    if (statusData.result) renderResults(statusData.result);
+                }, 800);
             } else if (statusData.status === "error") {
                 clearInterval(pollInterval);
                 throw new Error(statusData.error || "Unknown analysis error");
@@ -292,7 +316,12 @@ async function pollJob(jobId) {
             clearInterval(pollInterval);
             document.getElementById('loader').classList.add('hidden');
             analyzeBtn.disabled = false;
-            showNotification(e.message, "error");
+            showCustomModal({
+                title: 'Polling Failed',
+                message: e.message,
+                icon: 'wifi-off',
+                showCancel: false
+            });
         }
     }, 2000);
 }
@@ -556,10 +585,98 @@ function renderCandidateCard(item, container, index, isRejected = false) {
     container.appendChild(card);
 }
 
+// --- Custom Modal System ---
+function showCustomModal({ title, message, icon = 'help-circle', showCancel = true, confirmText = 'Confirm', cancelText = 'Cancel' }) {
+    return new Promise((resolve) => {
+        const modal = document.getElementById('custom-modal');
+        const titleEl = document.getElementById('modal-title');
+        const messageEl = document.getElementById('modal-message');
+        const iconContainer = document.getElementById('modal-icon-container');
+        const confirmBtn = document.getElementById('modal-confirm-btn');
+        const cancelBtn = document.getElementById('modal-cancel-btn');
+
+        titleEl.textContent = title;
+        messageEl.textContent = message;
+        confirmBtn.textContent = confirmText;
+        cancelBtn.textContent = cancelText;
+        iconContainer.innerHTML = `<i data-lucide="${icon}"></i>`;
+        
+        if (showCancel) cancelBtn.classList.remove('hidden');
+        else cancelBtn.classList.add('hidden');
+
+        if (window.lucide) {
+            lucide.createIcons({
+                root: modal
+            });
+        }
+
+        const handleConfirm = () => {
+            modal.classList.add('hidden');
+            cleanup();
+            resolve(true);
+        };
+
+        const handleCancel = () => {
+            modal.classList.add('hidden');
+            cleanup();
+            resolve(false);
+        };
+
+        const cleanup = () => {
+            confirmBtn.removeEventListener('click', handleConfirm);
+            cancelBtn.removeEventListener('click', handleCancel);
+        };
+
+        confirmBtn.addEventListener('click', handleConfirm);
+        cancelBtn.addEventListener('click', handleCancel);
+
+        modal.classList.remove('hidden');
+    });
+}
+
+// --- Loader Utility ---
+function updateLoaderUI(progress, currentStep = "") {
+    const progressBar = document.getElementById('poll-progress-bar');
+    const progressText = document.getElementById('poll-progress-text');
+    const statusText = document.getElementById('loader-status');
+
+    if (progressBar) progressBar.style.width = `${progress}%`;
+    if (progressText) progressText.textContent = `${Math.round(progress)}%`;
+    if (statusText && currentStep) statusText.textContent = currentStep;
+
+    const stepIds = ['step-parsing', 'step-analyzing', 'step-scoring', 'step-finalizing'];
+    let activeIndex = 0;
+
+    if (progress > 85) activeIndex = 3;
+    else if (progress > 60) activeIndex = 2;
+    else if (progress > 20) activeIndex = 1;
+    else activeIndex = 0;
+
+    stepIds.forEach((id, idx) => {
+        const el = document.getElementById(id);
+        if (!el) return;
+        if (idx < activeIndex) {
+            el.classList.add('completed');
+            el.classList.remove('active');
+        } else if (idx === activeIndex) {
+            el.classList.add('active');
+            el.classList.remove('completed');
+        } else {
+            el.classList.remove('active', 'completed');
+        }
+    });
+
+    lucide.createIcons();
+}
+
 // --- Utilities ---
 function showNotification(message, type = "info") {
-    // Simple alert for now, could be a toast in the future
-    alert(message);
+    showCustomModal({
+        title: 'Notification',
+        message: message,
+        icon: type === 'error' ? 'alert-circle' : 'info',
+        showCancel: false
+    });
 }
 
 // Open Folder Link
@@ -577,30 +694,17 @@ if (openReportBtn) {
 // Detailed Insight Modal
 window.showScoreDetail = function (idx) {
     const cand = lastAnalysisData.candidates[idx];
-
-    // Check if breakdown exists, if not create default
     const bd = cand.score.breakdown || { "Base Score": 0, "AI Bonus": 0, "Final": 0 };
 
-    const details = `
-    ----------- CANDIDATE INSIGHT -----------
-    Name: ${cand.candidate_name || cand.name}
-    File: ${cand.filename}
-    Email: ${cand.email || "N/A"} | Phone: ${cand.phone || "N/A"}
-    
-    ----------- SCORE BREAKDOWN -----------
-    Base Score (Skills + Exp):  ${bd["Base Score"] || cand.score.original_score || 0}
-    AI Achievement Bonus:       ${bd["AI Bonus"] > 0 ? "+" + bd["AI Bonus"] : bd["AI Bonus"]}
-    ---------------------------------------
-    FINAL SCORE:                ${cand.score.total}%
-    
-    ----------- AI REASONING -----------
-    ${cand.reasoning || "No detailed AI analysis available for this candidate."}
-    
-    ----------- STRENGTHS -----------
-    ${(cand.strengths || []).map(s => "• " + s).join('\n')}
-    `;
+    const details = `Final Score: ${cand.score.total}% | Base: ${bd["Base Score"] || 0} | Bonus: ${bd["AI Bonus"] || 0}`;
 
-    alert(details);
+    showCustomModal({
+        title: cand.candidate_name || cand.name,
+        message: `${details}\n\n${cand.reasoning || "No detailed AI analysis available."}`,
+        icon: 'user',
+        showCancel: false,
+        confirmText: 'Done'
+    });
 };
 
 // --- Handover Logic ---
@@ -608,47 +712,52 @@ const rejectProceedBtn = document.getElementById('reject-proceed-btn');
 if (rejectProceedBtn) {
     rejectProceedBtn.addEventListener('click', async () => {
         if (!lastAnalysisData || !lastAnalysisData.campaign_folder) {
-            alert("Analysis data not found. Please run screening first.");
+            showCustomModal({ title: 'Data Missing', message: 'Analysis data not found. Please run screening first.', icon: 'database', showCancel: false });
             return;
         }
 
-        if (!confirm("This will send rejection emails to all 'Not Selected' candidates and proceed to Test Formation. Continue?")) return;
+        const confirmed = await showCustomModal({
+            title: 'Confirm Handover',
+            message: "This will send rejection emails to all 'Not Selected' candidates and proceed to Test Formation. Continue?",
+            icon: 'send',
+            confirmText: 'Yes, Send & Proceed'
+        });
+
+        if (!confirmed) return;
+
+        rejectProceedBtn.disabled = true;
+        rejectProceedBtn.classList.add('loading-inline');
+        rejectProceedBtn.innerHTML = 'Sending Emails...';
 
         const reportFolder = lastAnalysisData.campaign_folder;
 
-        // 1. Fetch Not Selected List
         try {
             const resp = await fetch(`http://localhost:8000/reports/${reportFolder}/not_selected_candidates.json`);
             if (!resp.ok) throw new Error("Could not find rejection list.");
             const rejectedList = await resp.json();
-
-            // 2. Extract Emails
             const emails = rejectedList.map(c => c.email).filter(e => e);
 
             if (emails.length > 0) {
-                // 3. Send Rejection
                 const sendResp = await fetch('http://localhost:8000/aptitude-api/send-rejection', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        emails: emails,
-                        job_title: "Applicant" // Could extract from JD
-                    })
+                    body: JSON.stringify({ emails: emails, job_title: "Applicant" })
                 });
-                if (!sendResp.ok) alert("Warning: Failed to send some rejection emails.");
-                else alert(`Rejection emails sent to ${emails.length} candidates.`);
-            } else {
-                alert("No candidates to reject (or no emails found). Proceeding.");
+                
+                if (!sendResp.ok) {
+                    await showCustomModal({ title: 'Partial Success', message: 'Handover complete, but some emails failed to send.', icon: 'alert-triangle', showCancel: false });
+                } else {
+                    await showCustomModal({ title: 'Emails Sent', message: `Successfully notified ${emails.length} candidates.`, icon: 'check-circle', showCancel: false });
+                }
             }
 
-            // 4. Save Selected List URL for Aptitude App
             localStorage.setItem('aptitude_candidates_url', `http://localhost:8000/reports/${reportFolder}/selected_candidates.json`);
-
-            // 5. Navigate
             window.location.href = '/aptitude/index.html';
-
         } catch (e) {
-            alert("Error during handover: " + e.message);
+            showCustomModal({ title: 'Handover Error', message: e.message, icon: 'alert-octagon', showCancel: false });
+            rejectProceedBtn.disabled = false;
+            rejectProceedBtn.classList.remove('loading-inline');
+            rejectProceedBtn.innerHTML = 'Reject & Proceed';
         }
     });
 }
@@ -658,7 +767,7 @@ const viewAllCandidatesBtn = document.getElementById('view-all-candidates-btn');
 if (viewAllCandidatesBtn) {
     viewAllCandidatesBtn.addEventListener('click', () => {
         if (!lastAnalysisData) {
-            alert("No analysis data available. Please run screening first.");
+            showCustomModal({ title: 'No Data', message: 'No analysis data available. Please run screening first.', icon: 'search', showCancel: false });
             return;
         }
         showCandidatesModal();
@@ -751,9 +860,9 @@ function renderSimilarityCard(item, container, index) {
     const vectorScore = item.vector_score || 0;
 
     card.innerHTML = `
-        <div class="card-header-row">
-            <h4>${item.name || 'Unknown'}</h4>
-            <span class="status-badge" style="background: rgba(107, 114, 128, 0.2); color: #9ca3af;">
+        <div class="card-header" style="display: flex; justify-content: space-between; align-items: center;">
+            <h4 style="margin:0;">${item.name || 'Unknown'}</h4>
+            <span class="status-badge status-rejected" style="background: #f1f5f9; color: #64748b; border: 1px solid #e2e8f0;">
                 Similarity Only
             </span>
         </div>
