@@ -1,0 +1,11 @@
+# Python secrets
+client_secret.json
+tokens/
+*.pickle
+__pycache__/
+*.log
+venv/
+.env
+chroma_db/
+Reports/
+temp/

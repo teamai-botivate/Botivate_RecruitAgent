@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RecruitAI | AI JD Generator</title>
+    <link rel="stylesheet" href="styles.css?v=2.0">
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&display=swap"
+        rel="stylesheet">
+    <script src="https://unpkg.com/lucide@latest"></script>
+</head>
+
+<body class="light-theme">
+    <!-- Decorative background elements -->
+    <div class="bg-blur blur-1"></div>
+    <div class="bg-blur blur-2"></div>
+    <div class="bg-blur blur-3"></div>
+
+    <nav class="navbar glass">
+        <div class="nav-container">
+            <div class="logo">
+                <span class="logo-icon"><i data-lucide="users"></i></span>
+                <span class="logo-text">Botivate RecruitAgent</span>
+            </div>
+            <div class="nav-links">
+                <div class="workflow-stepper">
+                    <a href="/jd-tools/index.html" class="step active" data-step="1">JD Generator</a>
+                    <a href="/index.html" class="step" data-step="2">Resume Screening</a>
+                    <a href="/aptitude/index.html" class="step" data-step="3">Aptitude Generator</a>
+                </div>
+            </div>
+            <div class="nav-actions">
+                <!-- Actions specific to JD Generator if any -->
+            </div>
+        </div>
+    </nav>
+
+    <main class="content-wrapper">
+        <header class="hero-section">
+            <h1 class="animate-text">Craft Perfect <span class="gradient-text">Job Descriptions</span></h1>
+            <p class="subtitle animate-fade-in">Generative AI assistant for professional, ATS-friendly JDs.</p>
+        </header>
+
+        <div class="generator-layout">
+            <!-- Form Section -->
+            <section class="main-card glass animate-slide-up">
+                <form id="jd-form">
+                    <div class="form-sections">
+                        <!-- Step 1: Company Details -->
+                        <div class="form-section">
+                            <div class="section-badge">Step 1</div>
+                            <h3 class="section-title">Company Details</h3>
+                            <div class="input-grid">
+                                <div class="input-field">
+                                    <label>Company Name</label>
+                                    <input type="text" id="company-name" placeholder="e.g., TechNova Solutions"
+                                        required>
+                                </div>
+                                <div class="input-field">
+                                    <label>Company Type</label>
+                                    <input type="text" id="company-type" placeholder="e.g., Startup / MNC" required>
+                                </div>
+                                <div class="input-field">
+                                    <label>Industry</label>
+                                    <input type="text" id="industry" placeholder="e.g., FinTech, Healthcare" required>
+                                </div>
+                                <div class="input-field">
+                                    <label>Location</label>
+                                    <input type="text" id="location" placeholder="e.g., Remote / Raipur" required>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Step 2: Role Identification -->
+                        <div class="form-section">
+                            <div class="section-badge">Step 2</div>
+                            <h3 class="section-title">Role Identification</h3>
+                            <div class="input-grid">
+                                <div class="input-field">
+                                    <label>For Which Role</label>
+                                    <input type="text" id="role-title" placeholder="e.g., Backend Developer" required>
+                                </div>
+                                <div class="input-field">
+                                    <label>Experience Level</label>
+                                    <select id="experience" required>
+                                        <option value="" disabled selected>Select Level</option>
+                                        <option value="0–1 Year">0–1 Year</option>
+                                        <option value="2–4 Years">2–4 Years</option>
+                                        <option value="5+ Years">5+ Years</option>
+                                    </select>
+                                </div>
+                                <div class="input-field">
+                                    <label>Employment Type</label>
+                                    <select id="employment-type" required>
+                                        <option value="" disabled selected>Select Employment</option>
+                                        <option value="Full-Time">Full-Time</option>
+                                        <option value="Internship">Internship</option>
+                                    </select>
+                                </div>
+                                <div class="input-field">
+                                    <label>Work Mode</label>
+                                    <select id="work-mode" required>
+                                        <option value="" disabled selected>Select Mode</option>
+                                        <option value="Onsite">Onsite</option>
+                                        <option value="Remote">Remote</option>
+                                        <option value="Hybrid">Hybrid</option>
+                                    </select>
+                                </div>
+                                <div class="input-field">
+                                    <label>Salary (Lakhs per Annum)</label>
+                                    <input type="number" id="salary" placeholder="e.g., 12" min="0" step="0.1" required>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="action-footer">
+                        <button type="submit" id="generate-btn" class="primary-btn pulse-on-hover">
+                            <span>Generate JD</span>
+                            <span class="btn-icon"><i data-lucide="sparkles"></i></span>
+                        </button>
+                    </div>
+                </form>
+            </section>
+
+            <!-- Result Section -->
+            <section id="result-section" class="main-card glass hidden animate-slide-up">
+                <div class="result-header">
+                    <h3 class="section-title">Generated Job Description</h3>
+                    <div class="result-actions">
+                        <button id="copy-btn" class="glass-btn secondary-btn" title="Copy to Clipboard">
+                            <i data-lucide="copy"></i> Copy
+                        </button>
+                        <button id="download-btn" class="glass-btn secondary-btn" title="Download as .txt">
+                            <i data-lucide="download"></i> Download TXT
+                        </button>
+                        <button id="proceed-btn" class="proceed-btn" title="Use JD for Screening">
+                            <i data-lucide="arrow-right-circle"></i> Proceed to Screening
+                        </button>
+                    </div>
+                </div>
+                <div id="jd-output" class="jd-content">
+                    <!-- AI output injected here -->
+                </div>
+            </section>
+        </div>
+
+        <!-- Loading State -->
+        <div id="loader" class="loader-overlay hidden">
+            <div class="loader-content glass">
+                <div class="ai-spinner">
+                    <div class="orb"></div>
+                    <div class="orb"></div>
+                    <div class="orb"></div>
+                </div>
+                <h3>Synthesizing Optimal JD...</h3>
+                <p>Analyzing market standards and role requirements.</p>
+            </div>
+        </div>
+    </main>
+
+    <footer class="animate-fade-in">
+        <p>Powered By <span class="footer-brand">Botivate</span></p>
+    </footer>
+
+    <script src="script.js"></script>
+</body>
+
+</html>

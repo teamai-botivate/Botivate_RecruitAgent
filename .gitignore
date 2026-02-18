@@ -1,0 +1,57 @@
+# Python Standard
+__pycache__/
+*.py[cod]
+*$py.class
+venv/
+.venv/
+env/
+.env
+
+# Logs
+*.log
+agent_logs.txt
+
+# Application Data & Outputs
+data/
+chroma_db/
+Reports/
+ats_scores.json
+output.txt
+backend.log
+screenshots/
+
+# System Files
+.DS_Store
+Thumbs.db
+ehthumbs.db
+desktop.ini
+
+# IDE Settings
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Temp Files
+*.tmp
+*.bak
+
+# Google Credentials (DO NOT COMMIT)
+credentials.json
+token.json
+client_secret_*.json
+
+# Temporary Directories
+temp/
+__pycache__/
+
+# Secrets (CRITICAL)
+client_secret.json
+Backend/client_secret.json
+tokens/
+Backend/tokens/
+debug_last_prompt.txt
+Backend/debug_last_prompt.txt
+
+MANUAL_UPDATE.txt
+assessments_db.json
