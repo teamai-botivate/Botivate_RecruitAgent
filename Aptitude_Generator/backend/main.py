@@ -6,7 +6,7 @@ from fastapi import FastAPI, HTTPException, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from dotenv import load_dotenv
-from agent import generate_aptitude_questions
+from agent import generate_aptitude_questions, evaluate_code
 
 import json
 import time
@@ -54,6 +54,27 @@ app.add_middleware(
 
 class JDRequest(BaseModel):
     jd_text: str
+
+class RunCodeRequest(BaseModel):
+    code: str
+    language: str
+    problem_text: str
+    test_cases: list
+
+@app.post("/run-code")
+async def run_code(request: RunCodeRequest):
+    print(f"\n--- 💻 REQUEST: Evaluating Code ({request.language}) ---")
+    try:
+        result = evaluate_code(
+            request.problem_text, 
+            request.code, 
+            request.language, 
+            request.test_cases
+        )
+        return result
+    except Exception as e:
+        print(f"Error evaluating code: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 class EmailRequest(BaseModel):
     emails: list[str]

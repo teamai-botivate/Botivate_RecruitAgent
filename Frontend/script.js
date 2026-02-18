@@ -340,6 +340,16 @@ window.switchTab = function (tabName) {
 
 // --- Rendering Logic ---
 function renderResults(data) {
+    // Defense-in-depth: De-duplicate candidates by filename
+    if (data.candidates) {
+        const seen = new Set();
+        data.candidates = data.candidates.filter(c => {
+            if (seen.has(c.filename)) return false;
+            seen.add(c.filename);
+            return true;
+        });
+    }
+
     lastAnalysisData = data;
     currentReportPath = data.report_path;
     document.getElementById('results-area').classList.remove('hidden');

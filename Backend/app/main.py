@@ -745,37 +745,24 @@ async def _run_async_analysis(job_id: str, jd_text: str, source_dir: str, top_n:
         # Re-Sort Top Candidates after AI Adjustment
         updated_top_candidates.sort(key=lambda x: x['score']['total'], reverse=True)
         
-        # Sort Remaining Candidates (who didn't get AI analyzed)
-        remaining.sort(key=lambda x: x['score']['total'], reverse=True)
-        
-        # Add basic breakdown for remaining
+        # Merge lists: AI-analyzed and Remaining (Top N + the rest)
         for r in remaining:
-             if 'breakdown' not in r['score']: 
-                 r['score']['breakdown'] = { "Base Score": r['score']['total'], "AI Bonus": 0, "Final": r['score']['total'] }
-                 r['score']['breakdown_text'] = f"Base: {r['score']['total']} (No AI Analysis)"
-                
-        # Merge lists: AI-analyzed + Not-analyzed-but-valid
-        # Add not-analyzed candidates to remaining
-        for na_candidate in not_analyzed:
-            # Ensure they have basic score structure
-            if 'breakdown' not in na_candidate['score']:
-                na_candidate['score']['breakdown'] = {
-                    "Base Score": na_candidate['score']['total'],
+            if 'score' in r and 'breakdown' not in r['score']:
+                r['score']['breakdown'] = {
+                    "Base Score": r['score']['total'],
                     "AI Bonus": 0,
-                    "Final": na_candidate['score']['total']
+                    "Final": r['score']['total']
                 }
-                na_candidate['score']['breakdown_text'] = f"Similarity: {na_candidate.get('vector_score', 0):.2f} (Not AI analyzed)"
-            remaining.append(na_candidate)
-        
-        # Merge lists (AI-analyzed candidates + Remaining including not-analyzed)
+                r['score']['breakdown_text'] = f"Base: {r['score']['total']} (No AI Analysis)"
+
+        # Combine into one global list
         final_list = updated_top_candidates + remaining
         
-        # FINAL GLOBAL SORT: AI-analyzed first (by score), then not-analyzed (by vector_score)
+        # FINAL GLOBAL SORT: AI-analyzed first (by score), then not-analyzed (by score)
         final_list.sort(
             key=lambda x: (
-                x.get('ai_analyzed', False),  # True before False
-                x['score']['total'],  # AI score
-                x.get('vector_score', 0)  # Vector score as tiebreaker
+                x.get('ai_analyzed', False),  # True (1) before False (0)
+                x['score']['total']
             ),
             reverse=True
         )

@@ -76,13 +76,23 @@
         @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
 
         /* Proctoring */
-        .camera-badge { position: fixed; bottom: 20px; left: 20px; width: 140px; height: 100px; background: black; border-radius: 10px; border: 2px solid var(--primary); overflow: hidden; z-index: 500; }
+        .camera-badge { position: fixed; top: 100px; right: 20px; width: 140px; height: 100px; background: black; border-radius: 10px; border: 2px solid var(--primary); overflow: hidden; z-index: 500; transition: transform 0.2s; }
         #monitor-vid { width: 100%; height: 100%; object-fit: cover; transform: scaleX(-1); }
 
         /* Modal */
         .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.5); backdrop-filter: blur(5px); z-index: 1000; display: flex; align-items: center; justify-content: center; }
         .modal-card { background: white; padding: 30px; border-radius: 20px; width: 400px; text-align: center; }
         .glass-input { width: 100%; padding: 12px; border: 2px solid #f1f5f9; border-radius: 10px; margin: 15px 0; font-family: inherit; }
+
+        /* Warning Overlay */
+        .warning-overlay { 
+            position: fixed; inset: 0; background: rgba(220, 38, 38, 0.95); 
+            z-index: 9999; display: flex; flex-direction: column; align-items: center; 
+            justify-content: center; color: white; text-align: center; padding: 40px;
+            backdrop-filter: blur(10px);
+        }
+        .warning-overlay h1 { font-size: 3rem; margin-bottom: 20px; }
+        .warning-overlay p { font-size: 1.5rem; margin-bottom: 30px; }
     </style>
 </head>
 <body>
@@ -175,7 +185,10 @@
             <div id="success-view" class="center-card hidden animate-fade">
                 <i data-lucide="check-circle" style="width: 80px; height: 80px; color: #10b981; margin-bottom: 25px;"></i>
                 <h2>Assessment Submitted!</h2>
-                <p style="color: #64748b;">Thank you for completing the test. Your responses have been recorded and sent to the recruiter.</p>
+                <p style="color: #64748b; margin-bottom: 30px;">Thank you for completing the test. Your responses have been recorded and sent to the recruiter.</p>
+                <button class="primary-btn" style="margin: 0 auto; width: 100%; justify-content: center;" onclick="window.location.href='https://mail.google.com'">
+                    <i data-lucide="mail"></i> Return to Inbox
+                </button>
             </div>
 
         </main>
@@ -189,8 +202,20 @@
     </div>
 
     <!-- Proctoring Camera -->
-    <div class="camera-badge">
+    <div class="camera-badge" id="camera-badge" style="cursor: move;">
         <video id="monitor-vid" autoplay playsinline muted></video>
+        <div style="position: absolute; top:5px; right:5px; background: rgba(0,0,0,0.5); color: white; font-size: 10px; padding: 2px 5px; border-radius: 4px;">LIVE</div>
+    </div>
+
+    <!-- Full Screen Warning Overlay -->
+    <div id="warning-screen" class="warning-overlay hidden">
+        <i data-lucide="alert-triangle" style="width: 100px; height: 100px; margin-bottom: 20px;"></i>
+        <h1>SECURITY VIOLATION!</h1>
+        <p id="warning-msg">Suspicious activity detected. All activities are being recorded.</p>
+        <button class="primary-btn" style="background: white; color: #ef4444; border: none; font-size: 1.2rem; padding: 15px 40px;" onclick="dismissWarning()">
+            I Understand, Continue
+        </button>
+        <p style="margin-top: 20px; opacity: 0.8; font-size: 0.9rem;">Remaining Warnings: <span id="warnings-left">3</span></p>
     </div>
 
     <!-- Confirmation Modal -->
@@ -219,8 +244,10 @@
         
         let currentSection = 'mcq'; // 'mcq' or 'coding'
         let currentMcqIdx = 0;
-        let currentCodeIdx = 0;
-        let cheated = false;
+        let warningCount = 0;
+        let isAssessmentActive = false;
+        let proctoringPausedUntil = 0; // Grace period for button clicks
+        const MAX_WARNINGS = 3;
 
         // --- Init ---
         async function init() {
@@ -231,7 +258,7 @@
             }
 
             try {
-                const res = await fetch(`http://127.0.0.1:8002/get-assessment/${token}`);
+                const res = await fetch(`/aptitude-api/get-assessment/${token}`);
                 if (!res.ok) throw new Error("Link expired or invalid.");
                 
                 assessmentData = await res.json();
@@ -250,6 +277,7 @@
         }
 
         function startAssessment() {
+            isAssessmentActive = true;
             document.getElementById('welcome-view').classList.add('hidden');
             document.getElementById('test-info').classList.remove('hidden');
             document.getElementById('footer-nav').classList.remove('hidden');
@@ -342,6 +370,7 @@
         }
 
         function goNext() {
+            proctoringPausedUntil = Date.now() + 2000; // Brief pause during navigation/submission
             if (currentSection === 'mcq') {
                 if (currentMcqIdx < assessmentData.mcqs.length - 1) {
                     showMcq(currentMcqIdx + 1);
@@ -371,18 +400,69 @@
             }
         }
 
-        // --- Simulation: Run Code ---
-        document.getElementById('run-code').onclick = () => {
+        // --- Logic: Run Code ---
+        document.getElementById('run-code').onclick = async () => {
+            const runBtn = document.getElementById('run-code');
             const logs = document.getElementById('console-logs');
-            logs.innerHTML = `<span style="color: #fbbf24;">Compiling & Running...</span>`;
-            setTimeout(() => {
+            const code = document.getElementById('editor').value;
+            const lang = document.querySelector('.lang-select').value;
+            const problem = assessmentData.coding[currentCodeIdx];
+
+            if (!code.trim()) { alert("Please write some code first!"); return; }
+
+            runBtn.disabled = true;
+            runBtn.style.opacity = "0.5";
+            logs.innerHTML = `<span style="color: #fbbf24;">⚡ AI Agent is analysing and testing your code...</span>`;
+            
+            proctoringPausedUntil = Date.now() + 5000; // Pause for 5 seconds
+            
+            try {
+                const res = await fetch('/aptitude-api/run-code', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        code: code,
+                        language: lang,
+                        problem_text: `${problem.title}\n${problem.description}\n${problem.constraints}`,
+                        test_cases: Array.isArray(problem.test_cases) ? problem.test_cases : []
+                    })
+                });
+                
+                if (!res.ok) throw new Error("Evaluation failed");
+                const result = await res.json();
+                
+                if (result.success) {
+                    logs.innerHTML = `
+                        <div style="color: #10b981; font-weight:800; margin-bottom:10px;">✅ AI STATUS: LOGIC CORRECT</div>
+                        <div style="color: #f1f5f9; background: #0f172a; padding: 12px; border-radius: 8px; border: 1px solid #334155; white-space: pre-wrap; font-size: 0.9rem;">${result.output}</div>
+                        <div style="color: #10b981; font-weight:800; margin-top:12px; font-size: 1.1rem;">
+                            <i data-lucide="check-circle" style="display:inline-block; width:18px; vertical-align:middle;"></i>
+                            ${result.passed_count}/${result.total_count} Test Cases Passed!
+                        </div>
+                    `;
+                } else {
+                    logs.innerHTML = `
+                        <div style="color: #ef4444; font-weight:800; margin-bottom:10px;">❌ AI STATUS: LOGIC FAILED / ERRORS</div>
+                        <div style="color: #f1f5f9; background: #450a0a; padding: 12px; border-radius: 8px; border: 1px solid #7f1d1d; white-space: pre-wrap; font-size: 0.9rem;">${result.output}</div>
+                        <div style="color: #ef4444; font-weight:800; margin-top:12px; font-size: 1.1rem;">
+                            <i data-lucide="x-circle" style="display:inline-block; width:18px; vertical-align:middle;"></i>
+                            ${result.passed_count}/${result.total_count} Test Cases Passed
+                        </div>
+                    `;
+                }
+                lucide.createIcons();
+            } catch (err) {
                 logs.innerHTML = `
-                    <div style="color: #10b981;">✅ Compilation Successful</div>
-                    <div style="margin-top:5px;">Input provided: ${assessmentData.coding[currentCodeIdx].example_input}</div>
-                    <div style="color: #f1f5f9;">Output: ${assessmentData.coding[currentCodeIdx].example_output}</div>
-                    <div style="color: #10b981; font-weight:800; margin-top:5px;">Test Case Passed!</div>
+                    <div style="color: #ef4444; font-weight:800;">❌ EVALUATION FAILED</div>
+                    <div style="color: #f1f5f9; font-size: 0.85rem; margin-top:8px; background: rgba(239, 68, 68, 0.1); padding: 10px; border-radius: 5px;">
+                        <strong>Problem:</strong> ${err.message}<br>
+                        <span style="font-size: 0.75rem; opacity: 0.8;">Action: Please REFRESH the page (Ctrl + F5) and ensure the backend is running.</span>
+                    </div>
                 `;
-            }, 1000);
+            } finally {
+                runBtn.disabled = false;
+                runBtn.style.opacity = "1";
+            }
         };
 
         // --- Proctoring Logic ---
@@ -397,10 +477,138 @@
 
             document.addEventListener('visibilitychange', () => {
                 if (document.hidden) {
-                    cheated = true;
-                    alert("WARNING: Tab switch detected! This activity is logged.");
+                    triggerWarning("Tab switch detected! This activity is logged.");
                 }
             });
+
+            // Start Face Monitoring
+            startFaceMonitoring();
+            
+            // Make Camera Badge Draggable
+            makeDraggable(document.getElementById('camera-badge'));
+        }
+
+        function triggerWarning(msg) {
+            if (!isAssessmentActive) return;
+            if (Date.now() < proctoringPausedUntil) return; // Skip if paused due to button click
+            warningCount++;
+            document.getElementById('warning-msg').textContent = msg;
+            document.getElementById('warnings-left').textContent = Math.max(0, MAX_WARNINGS - warningCount);
+            document.getElementById('warning-screen').classList.remove('hidden');
+        }
+
+        function dismissWarning() {
+            document.getElementById('warning-screen').classList.add('hidden');
+        }
+
+        function makeDraggable(el) {
+            let pos1 = 0, pos2 = 0, pos3 = 0, pos4 = 0;
+            el.onmousedown = dragMouseDown;
+
+            function dragMouseDown(e) {
+                e = e || window.event;
+                e.preventDefault();
+                pos3 = e.clientX;
+                pos4 = e.clientY;
+                document.onmouseup = closeDragElement;
+                document.onmousemove = elementDrag;
+            }
+
+            function elementDrag(e) {
+                e = e || window.event;
+                e.preventDefault();
+                pos1 = pos3 - e.clientX;
+                pos2 = pos4 - e.clientY;
+                pos3 = e.clientX;
+                pos4 = e.clientY;
+                el.style.top = (el.offsetTop - pos2) + "px";
+                el.style.left = (el.offsetLeft - pos1) + "px";
+                el.style.bottom = "auto"; // Remove bottom positioning
+                el.style.right = "auto";  // Remove right positioning
+            }
+
+            function closeDragElement() {
+                document.onmouseup = null;
+                document.onmousemove = null;
+            }
+        }
+
+        async function startFaceMonitoring() {
+            try {
+                const MODEL_URL = 'https://raw.githubusercontent.com/justadudewhohacks/face-api.js/master/weights/';
+                // Load detection and landmark models
+                await Promise.all([
+                    faceapi.nets.tinyFaceDetector.loadFromUri(MODEL_URL),
+                    faceapi.nets.faceLandmark68Net.loadFromUri(MODEL_URL)
+                ]);
+                
+                const video = document.getElementById('monitor-vid');
+                let faceMissingCount = 0;
+                let lookingAwayCount = 0;
+                let talkingCount = 0;
+
+                setInterval(async () => {
+                    const isWarningShowing = !document.getElementById('warning-screen').classList.contains('hidden');
+                    if (!isWarningShowing && video.readyState === 4) {
+                        const detections = await faceapi.detectAllFaces(video, new faceapi.TinyFaceDetectorOptions()).withFaceLandmarks();
+                        
+                        if (detections.length === 0) {
+                            faceMissingCount++;
+                            if (faceMissingCount >= 3) {
+                                triggerWarning("Face not detected! Please stay focused on the screen.");
+                                faceMissingCount = 0;
+                            }
+                        } else if (detections.length > 1) {
+                            triggerWarning("Multiple faces detected! Please ensure you are alone.");
+                            faceMissingCount = 0;
+                        } else {
+                            faceMissingCount = 0;
+                            const landmarks = detections[0].landmarks;
+                            
+                            // 1. Detect Looking Away (Orientation Heuristic)
+                            const nose = landmarks.getNose();
+                            const leftEye = landmarks.getLeftEye();
+                            const rightEye = landmarks.getRightEye();
+                            
+                            const eyeCenterDist = rightEye[0].x - leftEye[3].x;
+                            const noseToLeftEye = nose[0].x - leftEye[3].x;
+                            const noseToRightEye = rightEye[0].x - nose[0].x;
+                            
+                            const symmetryRatio = noseToLeftEye / noseToRightEye;
+                            
+                            // 2. Detect Talking (Mouth Opening Heuristic)
+                            const mouth = landmarks.getMouth();
+                            // Distance between inner lip top and bottom
+                            const mouthGap = Math.abs(mouth[14].y - mouth[18].y);
+                            const mouthRatio = mouthGap / eyeCenterDist;
+
+                            // Thresholds: Symmetry < 0.35 or > 2.8 indicates head turned (relaxed)
+                            if (symmetryRatio < 0.35 || symmetryRatio > 2.8) {
+                                lookingAwayCount++;
+                                if (lookingAwayCount >= 3) {
+                                    triggerWarning("Please look straight at the screen. Looking away is prohibited.");
+                                    lookingAwayCount = 0;
+                                }
+                            } else {
+                                lookingAwayCount = 0;
+                            }
+
+                            // mouthRatio > 0.2 typically means mouth is open/talking
+                            if (mouthRatio > 0.18) {
+                                talkingCount++;
+                                if (talkingCount >= 3) {
+                                    triggerWarning("Talking or suspicious lip movement detected.");
+                                    talkingCount = 0;
+                                }
+                            } else {
+                                talkingCount = 0;
+                            }
+                        }
+                    }
+                }, 1000); 
+            } catch (e) {
+                console.warn("Proctoring AI failed to start:", e);
+            }
         }
 
         function startTimer() {
@@ -446,17 +654,18 @@
                 mcq_total: assessmentData.mcqs.length,
                 coding_score: codingScore,
                 coding_total: assessmentData.coding.length,
-                suspicious: cheated ? "Flagged: Tab Switch / Camera Issue" : "Normal"
+                suspicious: warningCount >= MAX_WARNINGS ? "Suspicious activity" : (warningCount > 0 ? `Flagged: ${warningCount} Warnings` : "Normal")
             };
 
             try {
-                const res = await fetch('http://127.0.0.1:8002/submit-assessment', {
+                const res = await fetch('/aptitude-api/submit-assessment', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify(data)
                 });
                 
                 if (res.ok) {
+                    isAssessmentActive = false;
                     document.getElementById('submit-modal').classList.add('hidden');
                     document.getElementById('mcq-view').classList.add('hidden');
                     document.getElementById('coding-view').classList.add('hidden');

@@ -83,3 +83,46 @@ def generate_aptitude_questions(jd_text: str):
     except Exception as e:
         print(f"❌ AGENT ERROR: {e}")
         raise e
+
+def evaluate_code(problem_text: str, user_code: str, language: str, test_cases: list):
+    """
+    Evaluates the user's code against the problem statement and test cases using AI.
+    """
+    prompt = f"""
+    Evaluate the following coding assessment submission.
+    
+    PROBLEM DESCRIPTION:
+    {problem_text}
+    
+    TEST CASES:
+    {json.dumps(test_cases, indent=2)}
+    
+    CANDIDATE CODE ({language}):
+    {user_code}
+    
+    INSTRUCTIONS:
+    1. Analyze the code for logic, correctness, and adherence to constraints.
+    2. Check if the code would pass the provided test cases.
+    3. Return a JSON object with:
+       - "success": boolean (true if logic is correct and passes test cases)
+       - "output": string (compiler-style output or explanation of errors)
+       - "passed_count": number of test cases passed
+       - "total_count": total number of test cases provided
+    
+    OUTPUT ONLY THE JSON.
+    """
+    
+    try:
+        completion = client.chat.completions.create(
+            model="gpt-4o",
+            messages=[
+                {"role": "system", "content": "You are a code execution and evaluation agent. Be strict and accurate."},
+                {"role": "user", "content": prompt}
+            ],
+            temperature=0.0,
+            response_format={ "type": "json_object" }
+        )
+        return json.loads(completion.choices[0].message.content)
+    except Exception as e:
+        print(f"❌ EVALUATION ERROR: {e}")
+        return {"success": False, "output": f"Evaluation Error: {str(e)}", "passed_count": 0, "total_count": len(test_cases)}

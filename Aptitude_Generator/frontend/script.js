@@ -136,7 +136,7 @@ function setupEventListeners() {
             selectionSection.scrollIntoView({ behavior: 'smooth' });
         } catch (error) {
             console.error("GENERATION ERROR:", error);
-            alert(`Error: ${error.message}\n\nPlease ensure the backend is running on port 8002 and your network allows the connection.`);
+            alert(`Error: ${error.message}\n\nPlease ensure the backend is running and your network allows the connection.`);
             showLoader(false);
         }
     });
@@ -708,12 +708,20 @@ window.viewCandidateDetails = async function (jobTitle, token) {
         candidateList.innerHTML = assessment.emails.map(email => {
             const sub = submissions.find(s => s.email === email);
 
-            let status = sub ? 'Attempted' : 'Pending';
-            let statusClass = sub ? 'status-attempted' : 'status-pending';
+            let status = "Not Started";
+            let statusClass = "not-started";
 
-            if (sub && sub.suspicious !== "Normal") {
-                status = "Flagged";
-                statusClass = "status-sent"; // reuse style or add flagged
+            if (sub) {
+                if (sub.suspicious === "Suspicious activity") {
+                    status = "Major Violation";
+                    statusClass = "suspicious";
+                } else if (sub.suspicious !== "Normal") {
+                    status = "Minor Violation";
+                    statusClass = "pending";
+                } else {
+                    status = "Completed";
+                    statusClass = "attempted";
+                }
             }
 
             const mcqScore = sub ? (sub.mcq_score !== undefined ? `${sub.mcq_score}/${sub.mcq_total}` : `${sub.score}/${sub.total}`) : '-';
